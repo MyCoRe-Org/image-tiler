@@ -18,14 +18,13 @@
 
 package org.mycore.imagetiler;
 
-
-import javax.imageio.ImageReader;
-
-import java.awt.*;
+import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.zip.ZipOutputStream;
+
+import javax.imageio.ImageReader;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -86,8 +85,11 @@ class MCRMemSaveImage extends MCRImage {
             LOGGER.debug(() -> "reduced size: " + redWidth + "x" + redHeight);
         }
         final int stopOnZoomLevel = getZoomLevels(redWidth, redHeight);
-        BufferedImage lastPhaseImage = null;
         final boolean lastPhaseNeeded = Math.max(redWidth, redHeight) > TILE_SIZE;
+        //prepare empty image for the last phase of tiling process
+        BufferedImage lastPhaseImage = lastPhaseNeeded
+            ? new BufferedImage(redWidth, redHeight, getBufferedImageType(imageReader))
+            : null;
 
         final int xcount = (int) Math.ceil((float) getImageWidth() / (float) megaTileSize);
         final int ycount = (int) Math.ceil((float) getImageHeight() / (float) megaTileSize);
@@ -107,10 +109,6 @@ class MCRMemSaveImage extends MCRImage {
                 final BufferedImage tile = writeTiles(zout, megaTile, x, y, imageZoomLevels, zoomFactor,
                     stopOnZoomLevel);
                 if (lastPhaseNeeded) {
-                    //prepare empty image for the last phase of tiling process
-                    if (lastPhaseImage == null) {
-                        lastPhaseImage = new BufferedImage(redWidth, redHeight, tile.getType());
-                    }
                     stichTiles(lastPhaseImage, tile, x * TILE_SIZE, y * TILE_SIZE);
                 }
             }

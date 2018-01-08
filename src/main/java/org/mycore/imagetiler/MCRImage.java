@@ -305,6 +305,16 @@ public class MCRImage {
         return convertIfNeeded(tile);
     }
 
+    protected static int getBufferedImageType(final ImageReader reader) throws IOException {
+        ImageTypeSpecifier imageTypeSpecifier = reader.getImageTypes(0).next();
+        ColorModel colorModel = imageTypeSpecifier.getColorModel();
+        if (isFakeGrayScale(colorModel)) {
+            return BufferedImage.TYPE_BYTE_GRAY;
+        }
+        int imageType = imageTypeSpecifier.getBufferedImageType();
+        return imageType == BufferedImage.TYPE_CUSTOM ? BufferedImage.TYPE_INT_RGB : imageType;
+    }
+
     private static BufferedImage convertIfNeeded(BufferedImage tile) {
         ColorModel colorModel = tile.getColorModel();
         boolean convertToGray = isFakeGrayScale(colorModel);

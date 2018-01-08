@@ -44,7 +44,7 @@ import javax.xml.transform.stream.StreamSource;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class MCRTiledPictureProps {
 
-    private static JAXBContext jaxbContext;
+    private static final JAXBContext jaxbContext;
 
     static {
         try {
