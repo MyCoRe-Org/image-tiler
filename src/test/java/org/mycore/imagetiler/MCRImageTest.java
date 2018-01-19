@@ -130,9 +130,9 @@ public class MCRImageTest {
                 String wAttr = Objects.requireNonNull(imageInfo.getDocumentElement().getAttribute("width"));
                 String zAttr = Objects.requireNonNull(imageInfo.getDocumentElement().getAttribute("zoomLevel"));
                 String tAttr = Objects.requireNonNull(imageInfo.getDocumentElement().getAttribute("tiles"));
-                int iHeight = Integer.parseInt(hAttr);
-                int iWidth = Integer.parseInt(wAttr);
-                int iZoomLevel = Integer.parseInt(zAttr);
+                assertTrue("height must be positive: " + hAttr, Integer.parseInt(hAttr) > 0);
+                assertTrue("width must be positive: " + wAttr, Integer.parseInt(wAttr) > 0);
+                assertTrue("zoomLevel must be zeror or positive: " + zAttr, Integer.parseInt(zAttr) >= 0);
                 int iTiles = Integer.parseInt(tAttr);
                 assertEquals(tilesCount, iTiles);
 
