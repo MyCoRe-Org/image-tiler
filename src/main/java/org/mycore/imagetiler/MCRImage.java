@@ -27,6 +27,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.channels.ByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -273,9 +274,7 @@ public class MCRImage {
         return (short) Math.ceil(Math.log(maxDim) / LOG_2 - TILE_SIZE_FACTOR);
     }
 
-    private static ImageReader createImageReader(final Path imageFile) throws IOException {
-        final ImageInputStream imageInputStream = ImageIO.createImageInputStream(Files.newByteChannel(imageFile,
-            StandardOpenOption.READ));
+    static ImageReader createImageReader(final ImageInputStream imageInputStream) throws IOException {
         final Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInputStream);
         if (!readers.hasNext()) {
             imageInputStream.close();
@@ -508,24 +507,28 @@ public class MCRImage {
         if (eventHandler != null) {
             eventHandler.preImageReaderCreated();
         }
-        final ImageReader imageReader;
-        try {
-            imageReader = MCRImage.createImageReader(imageFile);
-        } finally {
-            if (eventHandler != null) {
-                eventHandler.postImageReaderCreated();
+        try (ByteChannel bc = Files.newByteChannel(imageFile, StandardOpenOption.READ);
+            ImageInputStream imageInputStream = ImageIO.createImageInputStream(bc)) {
+            
+            final ImageReader imageReader;
+            try {
+                imageReader = MCRImage.createImageReader(imageInputStream);
+            } finally {
+                if (eventHandler != null) {
+                    eventHandler.postImageReaderCreated();
+                }
             }
-        }
-        if (imageReader == null) {
-            throw new IOException("No ImageReader available for file: " + imageFile);
-        }
-        LOGGER.debug("ImageReader: {}", imageReader.getClass());
-        try (final ZipOutputStream zout = getZipOutputStream()) {
-            setImageSize(imageReader);
-            doTile(imageReader, zout);
-            writeMetaData(zout);
-        } finally {
-            imageReader.dispose();
+            if (imageReader == null) {
+                throw new IOException("No ImageReader available for file: " + imageFile);
+            }
+            LOGGER.debug("ImageReader: {}", imageReader.getClass());
+            try (final ZipOutputStream zout = getZipOutputStream()) {
+                setImageSize(imageReader);
+                doTile(imageReader, zout);
+                writeMetaData(zout);
+            } finally {
+                imageReader.dispose();
+            }
         }
         long end = System.nanoTime();
         final MCRTiledPictureProps imageProperties = getImageProperties();
