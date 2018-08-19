@@ -522,7 +522,7 @@ public class MCRImage {
                 throw new IOException("No ImageReader available for file: " + imageFile);
             }
             LOGGER.debug("ImageReader: {}", imageReader.getClass());
-            try (final ZipOutputStream zout = getZipOutputStream()) {
+            try (ZipOutputStream zout = getZipOutputStream()) {
                 setImageSize(imageReader);
                 doTile(imageReader, zout);
                 writeMetaData(zout);
@@ -725,7 +725,7 @@ public class MCRImage {
         if (tile.getType() == BufferedImage.TYPE_CUSTOM) {
             throw new IOException("Do not know how to handle image type 'CUSTOM'");
         }
-        try (final ImageOutputStream imageOutputStream = ImageIO.createImageOutputStream(zout)) {
+        try (ImageOutputStream imageOutputStream = ImageIO.createImageOutputStream(zout)) {
             imgWriter.setOutput(imageOutputStream);
             //tile = addWatermark(scaleBufferedImage(tile));        
             final IIOImage iioImage = new IIOImage(tile, null, null);

@@ -108,7 +108,7 @@ public class MCRTiledPictureProps {
      */
     public static MCRTiledPictureProps getInstanceFromDirectory(Path iviewFileRoot) throws IOException {
         Path imageInfoPath = iviewFileRoot.resolve(IMAGEINFO_XML);
-        try (final InputStream zin = Files.newInputStream(imageInfoPath)) {
+        try (InputStream zin = Files.newInputStream(imageInfoPath)) {
             try {
                 StreamSource is = new StreamSource(zin);
                 return jaxbContext.createUnmarshaller().unmarshal(is, MCRTiledPictureProps.class).getValue();
