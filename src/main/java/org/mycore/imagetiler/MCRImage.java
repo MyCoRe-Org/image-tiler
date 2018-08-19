@@ -273,7 +273,7 @@ public class MCRImage {
         return (short) Math.ceil(Math.log(maxDim) / LOG_2 - TILE_SIZE_FACTOR);
     }
 
-    static ImageReader createImageReader(final ImageInputStream imageInputStream) throws IOException {
+    private static ImageReader createImageReader(final ImageInputStream imageInputStream) throws IOException {
         final Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInputStream);
         if (!readers.hasNext()) {
             imageInputStream.close();
