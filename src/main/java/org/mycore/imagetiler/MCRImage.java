@@ -32,7 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.text.MessageFormat;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -501,7 +500,7 @@ public class MCRImage {
      */
     public MCRTiledPictureProps tile(MCRTileEventHandler eventHandler) throws IOException {
         long start = System.nanoTime();
-        LOGGER.info(MessageFormat.format("Start tiling of {0}:{1}", derivate, imagePath));
+        LOGGER.info(String.format(Locale.ENGLISH, "Start tiling of %s:%s", derivate, imagePath));
         //waterMarkFile = ImageIO.read(new File(MCRIview2Props.getProperty("Watermark")));	
         //initialize some basic variables
         if (eventHandler != null) {
@@ -533,7 +532,7 @@ public class MCRImage {
         long end = System.nanoTime();
         final MCRTiledPictureProps imageProperties = getImageProperties();
         long pixel = imageProperties.getWidth() * imageProperties.getHeight();
-        LOGGER.info(MessageFormat.format("Finished tiling of {0}:{1} in {2} ms ({3} MPixel/s). ", derivate, imagePath,
+        LOGGER.info(String.format(Locale.ENGLISH, "Finished tiling of %s:%s in %.0f ms (%d MPixel/s). ", derivate, imagePath,
             (end - start) / 1e6, 1000 * pixel / (end - start)));
         return imageProperties;
     }
