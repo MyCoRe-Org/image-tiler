@@ -79,8 +79,8 @@ public class MCRTiledPictureProps {
      * @throws IOException Exceptions occurs while accessing <code>iviewFile</code>.
      */
     public static MCRTiledPictureProps getInstance(final File iviewFile) throws IOException {
-        return iviewFile.isDirectory() ? getInstanceFromDirectory(iviewFile.toPath()) : getInstanceFromFile(iviewFile
-            .toPath());
+        return iviewFile.isDirectory() ? getInstanceFromDirectory(iviewFile.toPath())
+            : getInstanceFromFile(iviewFile.toPath());
     }
 
     /**

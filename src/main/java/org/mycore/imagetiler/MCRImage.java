@@ -508,7 +508,7 @@ public class MCRImage {
         }
         try (ByteChannel bc = Files.newByteChannel(imageFile, StandardOpenOption.READ);
             ImageInputStream imageInputStream = ImageIO.createImageInputStream(bc)) {
-            
+
             final ImageReader imageReader;
             try {
                 imageReader = MCRImage.createImageReader(imageInputStream);
@@ -532,8 +532,9 @@ public class MCRImage {
         long end = System.nanoTime();
         final MCRTiledPictureProps imageProperties = getImageProperties();
         long pixel = imageProperties.getWidth() * imageProperties.getHeight();
-        LOGGER.info(String.format(Locale.ENGLISH, "Finished tiling of %s:%s in %.0f ms (%d MPixel/s). ", derivate, imagePath,
-            (end - start) / 1e6, 1000 * pixel / (end - start)));
+        LOGGER.info(() -> String.format(Locale.ENGLISH,
+            "Finished tiling of %s:%s in %.0f ms (%d MPixel/s). ",
+            derivate, imagePath, (end - start) / 1e6, 1000 * pixel / (end - start)));
         return imageProperties;
     }
 
