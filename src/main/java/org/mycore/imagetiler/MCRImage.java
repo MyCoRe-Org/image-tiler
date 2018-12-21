@@ -385,9 +385,9 @@ public class MCRImage {
     }
 
     /**
-     * Returns a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
      * @param imageReader with an image on index 0
      * @throws IOException while reading image
+     * @return a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
      */
     public static int getImageType(final ImageReader imageReader) throws IOException {
         Iterator<ImageTypeSpecifier> imageTypes = imageReader.getImageTypes(0);
@@ -434,8 +434,8 @@ public class MCRImage {
     }
 
     /**
-     * Returns a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
      * @param image image to get the image type from
+     * @return  a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
      */
     public static int getImageType(BufferedImage image) {
         int imageType;
