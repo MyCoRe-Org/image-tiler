@@ -20,7 +20,7 @@
   <properties>
     <java.target.version>11</java.target.version>
     <!-- https://bugs.openjdk.java.net/browse/JDK-8208269 -->
-    <log4j.version>2.10.0</log4j.version>
+    <log4j.version>2.11.1</log4j.version>
   </properties>
   <build>
     <plugins>
@@ -35,6 +35,15 @@
               <id>imageTiler</id>
             </program>
           </programs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.apache.logging.log4j.jul.LogManager</java.util.logging.manager>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
@@ -104,11 +113,6 @@
       <version>2.3.1</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-      <version>${log4j.version}</version>
-    </dependency>
-    <dependency>
       <groupId>com.github.jai-imageio</groupId>
       <artifactId>jai-imageio-core</artifactId>
       <version>1.4.0</version>
@@ -128,7 +132,19 @@
     </dependency>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+      <version>${log4j.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
+      <version>${log4j.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-jul</artifactId>
       <version>${log4j.version}</version>
       <scope>test</scope>
     </dependency>
