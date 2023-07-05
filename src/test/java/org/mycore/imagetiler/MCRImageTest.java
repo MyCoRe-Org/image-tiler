@@ -90,6 +90,7 @@ public class MCRImageTest {
         pics.put("extra small", "src/test/resources/5x5.jpg");
         pics.put("tiff 48 bit", "src/test/resources/tiff48.tif");
         pics.put("tiff 16 bit", "src/test/resources/tiff16.tif");
+        pics.put("tiff ICC", "src/test/resources/rgb-to-gbr.tif");
 
         tileDir = Paths.get("target/tileDir");
         System.setProperty("java.awt.headless", "true");

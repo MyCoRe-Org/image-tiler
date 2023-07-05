@@ -21,6 +21,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorConvertOp;
 import java.awt.image.ColorModel;
 import java.awt.image.IndexColorModel;
 import java.io.BufferedOutputStream;
@@ -114,6 +115,8 @@ public class MCRImage {
     private static final short TILE_SIZE_FACTOR = (short) (Math.log(TILE_SIZE) / LOG_2);
 
     private static final double ZOOM_FACTOR = 0.5;
+
+    private static final ColorConvertOp COLOR_CONVERT_OP = new ColorConvertOp(null);
 
     /**
      * derivate ID (for output directory calculation).
@@ -247,7 +250,7 @@ public class MCRImage {
         if (lastPart.length() > MIN_FILENAME_SUFFIX_LEN) {
             baseDir = baseDir.resolve(
                 lastPart.substring(lastPart.length() - DIRECTORY_PART_LEN * 2, lastPart.length() - DIRECTORY_PART_LEN));
-            baseDir = baseDir.resolve(lastPart.substring(lastPart.length() - DIRECTORY_PART_LEN, lastPart.length()));
+            baseDir = baseDir.resolve(lastPart.substring(lastPart.length() - DIRECTORY_PART_LEN));
         } else {
             baseDir = baseDir.resolve(lastPart);
         }
@@ -282,7 +285,7 @@ public class MCRImage {
             return null;
         }
         final ImageReader reader = readers.next();
-        reader.setInput(imageInputStream, false);
+        reader.setInput(imageInputStream, false, true);
         return reader;
     }
 
@@ -336,12 +339,7 @@ public class MCRImage {
         }
         final BufferedImage newTile = new BufferedImage(tile.getWidth(), tile.getHeight(),
             convertToGray ? BufferedImage.TYPE_BYTE_GRAY : BufferedImage.TYPE_INT_RGB);
-        Graphics2D graphics2d = newTile.createGraphics();
-        try {
-            graphics2d.drawImage(tile, 0, 0, tile.getWidth(), tile.getHeight(), null);
-        } finally {
-            graphics2d.dispose();
-        }
+        COLOR_CONVERT_OP.filter(tile, newTile);
         return newTile;
     }
 
