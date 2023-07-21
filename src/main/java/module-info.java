@@ -8,6 +8,7 @@ module org.mycore.imagetiler {
     requires jakarta.xml.bind;
     requires org.apache.logging.log4j;
     requires com.github.spotbugs.annotations;
+    requires metadata.extractor;
     exports org.mycore.imagetiler;
     opens org.mycore.imagetiler to jakarta.xml.bind;
     uses org.mycore.imagetiler.MCRTileEventHandler;

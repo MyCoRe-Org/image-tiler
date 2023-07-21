@@ -17,22 +17,21 @@
  */
 package org.mycore.imagetiler;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.BitSet;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -47,11 +46,13 @@ import javax.imageio.stream.ImageOutputStream;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.apache.commons.io.FilenameUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.w3c.dom.Document;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Provides a good test case for {@link MCRImage}.
@@ -59,17 +60,19 @@ import org.w3c.dom.Document;
  *
  */
 public class MCRImageTest {
-    private final HashMap<String, String> pics = new HashMap<>();
+    private final Map<String, Path> pics = new LinkedHashMap<>();
 
     private Path tileDir;
 
+    private FileSystem landscapeZipFS;
+
     private static boolean deleteDirectory(final Path path) {
-        if(Files.exists(path)) {
-            try (Stream<Path> pathStream = Files.walk(path)){
+        if (Files.exists(path)) {
+            try (Stream<Path> pathStream = Files.walk(path)) {
                 pathStream
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
+                    .sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
             } catch (IOException e) {
                 //ignore
             }
@@ -83,16 +86,20 @@ public class MCRImageTest {
      * A list of images is initialized which provides various testcases for the tiler.
      */
     @Before
-    public void setUp() {
-        pics.put("small", "src/test/resources/Bay_of_Noboto.jpg");
-        pics.put("stripes", "src/test/resources/stripes.png");
-        pics.put("wide", "src/test/resources/labirynth_panorama_010.jpg");
-        pics.put("1 pixel mega tile rest", "src/test/resources/BE_0681_0397.jpg");
-        pics.put("extra small", "src/test/resources/5x5.jpg");
-        pics.put("tiff 48 bit", "src/test/resources/tiff48.tif");
-        pics.put("tiff 16 bit", "src/test/resources/tiff16.tif");
-        pics.put("tiff ICC", "src/test/resources/rgb-to-gbr.tif");
-
+    public void setUp() throws IOException {
+        Path testFilesDir = Path.of("src").resolve("test").resolve("resources");
+        final Path landscapeZip = testFilesDir.resolve("landscape.zip");
+        landscapeZipFS = FileSystems.newFileSystem(landscapeZip, this.getClass().getClassLoader());
+        pics.put("small", testFilesDir.resolve("Bay_of_Noboto.jpg"));
+        pics.put("stripes", testFilesDir.resolve("stripes.png"));
+        pics.put("wide", testFilesDir.resolve("labirynth_panorama_010.jpg"));
+        pics.put("1 pixel mega tile rest", testFilesDir.resolve("BE_0681_0397.jpg"));
+        pics.put("extra small", testFilesDir.resolve("5x5.jpg"));
+        pics.put("tiff 48 bit", testFilesDir.resolve("tiff48.tif"));
+        pics.put("tiff 16 bit", testFilesDir.resolve("tiff16.tif"));
+        pics.put("tiff ICC", testFilesDir.resolve("rgb-to-gbr.tif"));
+        pics.put("exif-orientation", landscapeZipFS.getPath("landscape_2.jpg"));
+        pics.put("tiff-orientation", landscapeZipFS.getPath("landscape_7.tiff"));
         tileDir = Paths.get("target/tileDir");
         System.setProperty("java.awt.headless", "true");
     }
@@ -101,8 +108,9 @@ public class MCRImageTest {
      * Tears down the testcase and removes temporary directories.
      */
     @After
-    public void tearDown() {
+    public void tearDown() throws IOException {
         deleteDirectory(tileDir);
+        landscapeZipFS.close();
     }
 
     /**
@@ -111,11 +119,14 @@ public class MCRImageTest {
      */
     @Test
     public void testTiling() throws Exception {
-        for (final Map.Entry<String, String> entry : pics.entrySet()) {
-            final File file = new File(entry.getValue());
+        final Path targetDir = tileDir.getParent().resolve("test-classes/thumbs");
+        if (!Files.isDirectory(targetDir)) {
+            Files.createDirectory(targetDir);
+        }
+        for (final Map.Entry<String, Path> entry : pics.entrySet()) {
             final String derivateID = "derivateID";
-            final String imagePath = "imagePath/" + FilenameUtils.getName(entry.getValue());
-            final MCRImage image = MCRImage.getInstance(file.toPath(), derivateID, imagePath);
+            final String imagePath = "imagePath/" + entry.getValue().getFileName();
+            final MCRImage image = MCRImage.getInstance(entry.getValue(), derivateID, imagePath);
             image.setTileDir(tileDir);
             final BitSet events = new BitSet(2);//pre- and post-event
             image.tile(new MCRTileEventHandler() {
@@ -151,14 +162,12 @@ public class MCRImageTest {
                 assertTrue("zoomLevel must be zero or positive: " + zAttr, Integer.parseInt(zAttr) >= 0);
                 int iTiles = Integer.parseInt(tAttr);
                 assertEquals(tilesCount, iTiles);
-                if ("stripes".equals(entry.getKey())) {
-                    ZipEntry tileEntry = new ZipEntry("0/0/0.jpg");
-                    try (InputStream is = iviewImage.getInputStream(tileEntry)) {
-                        System.out.println("Reading tile " + tileEntry.getName());
-                        final Path targetDir = tileDir.getParent();
-                        Files.copy(is, targetDir.resolve("stripes-thumb.jpg"),
-                            StandardCopyOption.REPLACE_EXISTING);
-                    }
+                ZipEntry tileEntry = new ZipEntry("0/0/0.jpg");
+                try (InputStream is = iviewImage.getInputStream(tileEntry)) {
+                    Path thumbnail = targetDir.resolve(entry.getKey() + "-thumb.jpg");
+                    System.out.println("Writing thumbnail to " + thumbnail);
+                    Files.copy(is, thumbnail,
+                        StandardCopyOption.REPLACE_EXISTING);
                 }
             }
             assertEquals(entry.getKey() + ": Metadata tile count does not match stored tile count.",
@@ -184,10 +193,10 @@ public class MCRImageTest {
             imageWriteParam.setCompressionQuality(0f);
             pngWriter.write(null, iioImage, imageWriteParam);
         }
-        final File file = new File(stripesImagePath);
+        final Path file = Path.of(stripesImagePath);
         final String derivateID = "derivateID";
-        final String imagePath = "imagePath/" + FilenameUtils.getName(stripesImagePath);
-        final MCRImage image = MCRImage.getInstance(file.toPath(), derivateID, imagePath);
+        final String imagePath = "imagePath/" + file.getFileName();
+        final MCRImage image = MCRImage.getInstance(file, derivateID, imagePath);
         image.setTileDir(tileDir);
         image.tile();
         assertTrue("Tile directory is not created.", Files.exists(tileDir));
