@@ -37,7 +37,7 @@ import org.mycore.imagetiler.input.impl.MCRFileChannelInputStream;
 public class MCRChannelImageInputStreamSpi extends ImageInputStreamSpi {
 
     public MCRChannelImageInputStreamSpi() {
-        super("MyCoRe Community (http://www.mycore.org)",
+        super("MyCoRe Community (https://www.mycore.org)",
             Optional.ofNullable(
                 MCRChannelImageInputStreamSpi.class.getPackage().getImplementationVersion()).orElse("1.0"),
             ReadableByteChannel.class);
@@ -51,7 +51,7 @@ public class MCRChannelImageInputStreamSpi extends ImageInputStreamSpi {
     @Override
     public ImageInputStream createInputStreamInstance(Object input, boolean useCache, File cacheDir)
         throws IOException {
-        if (input == null || !(input instanceof ReadableByteChannel)) {
+        if (!(input instanceof ReadableByteChannel)) {
             throw new IllegalArgumentException("invalid input");
         }
         if (input instanceof FileChannel) {

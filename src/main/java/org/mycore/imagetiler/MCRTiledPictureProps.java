@@ -79,6 +79,7 @@ public class MCRTiledPictureProps {
      * @return instance of the class referring <code>iviewFile</code>
      * @throws IOException Exceptions occurs while accessing <code>iviewFile</code>.
      */
+    @SuppressWarnings("unused")
     public static MCRTiledPictureProps getInstance(final File iviewFile) throws IOException {
         return iviewFile.isDirectory() ? getInstanceFromDirectory(iviewFile.toPath())
             : getInstanceFromFile(iviewFile.toPath());
@@ -119,6 +120,7 @@ public class MCRTiledPictureProps {
         }
     }
 
+    @SuppressWarnings("unused")
     public static JAXBContext getJaxbContext() {
         return jaxbContext;
     }
@@ -147,6 +149,7 @@ public class MCRTiledPictureProps {
     /**
      * @return the zoomlevel
      */
+    @SuppressWarnings("unused")
     public int getZoomlevel() {
         return zoomLevel;
     }

@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -64,8 +65,8 @@ public class MCRImageTest {
 
     private static boolean deleteDirectory(final Path path) {
         if(Files.exists(path)) {
-            try {
-                Files.walk(path)
+            try (Stream<Path> pathStream = Files.walk(path)){
+                pathStream
                 .sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
                 .forEach(File::delete);
@@ -78,7 +79,7 @@ public class MCRImageTest {
 
     /**
      * Sets up test.
-     * 
+     * <p>
      * A list of images is initialized which provides various testcases for the tiler.
      */
     @Before
@@ -116,7 +117,7 @@ public class MCRImageTest {
             final String imagePath = "imagePath/" + FilenameUtils.getName(entry.getValue());
             final MCRImage image = MCRImage.getInstance(file.toPath(), derivateID, imagePath);
             image.setTileDir(tileDir);
-            final BitSet events = new BitSet(2);//pre and post event
+            final BitSet events = new BitSet(2);//pre- and post-event
             image.tile(new MCRTileEventHandler() {
 
                 @Override
@@ -155,7 +156,7 @@ public class MCRImageTest {
                     try (InputStream is = iviewImage.getInputStream(tileEntry)) {
                         System.out.println("Reading tile " + tileEntry.getName());
                         final Path targetDir = tileDir.getParent();
-                        Files.copy(iviewImage.getInputStream(tileEntry), targetDir.resolve("stripes-thumb.jpg"),
+                        Files.copy(is, targetDir.resolve("stripes-thumb.jpg"),
                             StandardCopyOption.REPLACE_EXISTING);
                     }
                 }
@@ -171,25 +172,7 @@ public class MCRImageTest {
 
     @Test
     public void testStripes() throws IOException {
-        BufferedImage stripes = new BufferedImage(3000, 3000, BufferedImage.TYPE_INT_RGB);
-        Color top = new Color(134, 49, 68);
-        Color middle = new Color(255, 255, 255);
-        Color bottom = new Color(36, 52, 83);
-        for (int y = 0; y < 2366; y++) {
-            for (int x = 0; x < stripes.getWidth(); x++) {
-                stripes.setRGB(x, y, top.getRGB());
-            }
-        }
-        for (int y = 2366; y < 2376; y++) {
-            for (int x = 0; x < stripes.getWidth(); x++) {
-                stripes.setRGB(x, y, middle.getRGB());
-            }
-        }
-        for (int y = 2376; y < stripes.getHeight(); y++) {
-            for (int x = 0; x < stripes.getWidth(); x++) {
-                stripes.setRGB(x, y, bottom.getRGB());
-            }
-        }
+        BufferedImage stripes = getStripesImage();
         final ImageWriter pngWriter = ImageIO.getImageWritersByMIMEType("image/png").next();
         final String stripesImagePath = "target/simple-stripes.png";
         try (FileOutputStream fout = new FileOutputStream(stripesImagePath);
@@ -218,6 +201,29 @@ public class MCRImageTest {
                 Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
             }
         }
+    }
+
+    private static BufferedImage getStripesImage() {
+        BufferedImage stripes = new BufferedImage(3000, 3000, BufferedImage.TYPE_INT_RGB);
+        Color top = new Color(134, 49, 68);
+        Color middle = new Color(255, 255, 255);
+        Color bottom = new Color(36, 52, 83);
+        for (int y = 0; y < 2366; y++) {
+            for (int x = 0; x < stripes.getWidth(); x++) {
+                stripes.setRGB(x, y, top.getRGB());
+            }
+        }
+        for (int y = 2366; y < 2376; y++) {
+            for (int x = 0; x < stripes.getWidth(); x++) {
+                stripes.setRGB(x, y, middle.getRGB());
+            }
+        }
+        for (int y = 2376; y < stripes.getHeight(); y++) {
+            for (int x = 0; x < stripes.getWidth(); x++) {
+                stripes.setRGB(x, y, bottom.getRGB());
+            }
+        }
+        return stripes;
     }
 
     @Test
