@@ -17,9 +17,6 @@
  */
 package org.mycore.imagetiler;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -32,7 +29,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.BitSet;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -53,13 +50,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.w3c.dom.Document;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 /**
  * Provides a good test case for {@link MCRImage}.
  * @author Thomas Scheffler (yagee)
  *
  */
 public class MCRImageTest {
-    private final HashMap<String, String> pics = new HashMap<>();
+    private final Map<String, String> pics = new LinkedHashMap<>();
 
     private Path tileDir;
 
@@ -92,7 +92,8 @@ public class MCRImageTest {
         pics.put("tiff 48 bit", "src/test/resources/tiff48.tif");
         pics.put("tiff 16 bit", "src/test/resources/tiff16.tif");
         pics.put("tiff ICC", "src/test/resources/rgb-to-gbr.tif");
-
+        pics.put("exif-orientation", "src/test/resources/landscape_2.jpg");
+        pics.put("tiff-orientation", "src/test/resources/landscape_7.tiff");
         tileDir = Paths.get("target/tileDir");
         System.setProperty("java.awt.headless", "true");
     }
@@ -111,6 +112,10 @@ public class MCRImageTest {
      */
     @Test
     public void testTiling() throws Exception {
+        final Path targetDir = tileDir.getParent().resolve("test-classes/thumbs");
+        if (!Files.isDirectory(targetDir)) {
+            Files.createDirectory(targetDir);
+        }
         for (final Map.Entry<String, String> entry : pics.entrySet()) {
             final File file = new File(entry.getValue());
             final String derivateID = "derivateID";
@@ -151,14 +156,12 @@ public class MCRImageTest {
                 assertTrue("zoomLevel must be zero or positive: " + zAttr, Integer.parseInt(zAttr) >= 0);
                 int iTiles = Integer.parseInt(tAttr);
                 assertEquals(tilesCount, iTiles);
-                if ("stripes".equals(entry.getKey())) {
-                    ZipEntry tileEntry = new ZipEntry("0/0/0.jpg");
-                    try (InputStream is = iviewImage.getInputStream(tileEntry)) {
-                        System.out.println("Reading tile " + tileEntry.getName());
-                        final Path targetDir = tileDir.getParent();
-                        Files.copy(is, targetDir.resolve("stripes-thumb.jpg"),
-                            StandardCopyOption.REPLACE_EXISTING);
-                    }
+                ZipEntry tileEntry = new ZipEntry("0/0/0.jpg");
+                try (InputStream is = iviewImage.getInputStream(tileEntry)) {
+                    Path thumbnail = targetDir.resolve(entry.getKey() + "-thumb.jpg");
+                    System.out.println("Writing thumbnail to " + thumbnail);
+                    Files.copy(is, thumbnail,
+                        StandardCopyOption.REPLACE_EXISTING);
                 }
             }
             assertEquals(entry.getKey() + ": Metadata tile count does not match stored tile count.",

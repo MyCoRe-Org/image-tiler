@@ -104,7 +104,8 @@ public class MCRMemSaveImage extends MCRImage {
                 final int width = Math.min(megaTileSize, getImageWidth() - xpos);
                 final int ypos = y * megaTileSize;
                 final int height = Math.min(megaTileSize, getImageHeight() - ypos);
-                final BufferedImage megaTile = MCRImage.getTileOfFile(imageReader, xpos, ypos, width, height);
+                final BufferedImage megaTile = MCRImage.getTileOfFile(imageReader, xpos, ypos, width, height,
+                    getOrientation(), getImageWidth(), getImageHeight());
                 LOGGER.debug("megaTile create - start tiling");
                 // stitch
                 final BufferedImage tile = writeTiles(zout, megaTile, x, y, imageZoomLevels, zoomFactor,

@@ -20,6 +20,7 @@ package org.mycore.imagetiler;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
 import java.awt.image.ColorModel;
@@ -55,6 +56,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.mycore.imagetiler.internal.MCRMemSaveImage;
 
+import com.drew.imaging.ImageMetadataReader;
+import com.drew.imaging.ImageProcessingException;
+import com.drew.metadata.Metadata;
+import com.drew.metadata.MetadataException;
+import com.drew.metadata.exif.ExifIFD0Directory;
+
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.annotation.XmlAccessType;
@@ -78,9 +85,8 @@ import jakarta.xml.bind.annotation.XmlRootElement;
  * </dl>
  * results in: <code>tileDir/mycore/derivate/45/67/mycore_derivate_01234567/directory/image.iview2</code><br>
  * You can use {@link #getTiledFile(Path, String, String)} to get access to the IView2 file.
- * 
- * @author Thomas Scheffler (yagee)
  *
+ * @author Thomas Scheffler (yagee)
  */
 public class MCRImage {
 
@@ -88,6 +94,7 @@ public class MCRImage {
 
     /**
      * this is the JPEG compression rate.
+     *
      * @see JPEGImageWriteParam#setCompressionQuality(float)
      */
     private static final float JPEG_COMPRESSION_RATE = 0.75f;
@@ -147,9 +154,15 @@ public class MCRImage {
 
     private int imageWidth;
 
+    private int imagePhysicalHeight;
+
+    private int imagePhysicalWidth;
+
     private final ImageWriter imageWriter;
 
     private int imageZoomLevels;
+
+    private MCROrientation orientation;
 
     static {
         imageWriteParam = new JPEGImageWriteParam(Locale.getDefault());
@@ -169,8 +182,9 @@ public class MCRImage {
 
     /**
      * for internal use only: uses required properties to instantiate.
-     * @param file the image file
-     * @param derivateID the derivate ID the image belongs to
+     *
+     * @param file         the image file
+     * @param derivateID   the derivate ID the image belongs to
      * @param relImagePath the relative path from the derivate root to the image
      */
     protected MCRImage(final Path file, final String derivateID, final String relImagePath) {
@@ -182,9 +196,10 @@ public class MCRImage {
 
     /**
      * returns instance of MCRImage (or subclass).
-     * @param file the image file
+     *
+     * @param file       the image file
      * @param derivateID the derivate ID the image belongs to
-     * @param imagePath the relative path from the derivate root to the image
+     * @param imagePath  the relative path from the derivate root to the image
      * @return new instance of MCRImage representing <code>file</code>
      */
     public static MCRImage getInstance(final Path file, final String derivateID, final String imagePath) {
@@ -193,7 +208,8 @@ public class MCRImage {
 
     /**
      * calculates the amount of tiles produces by this image dimensions.
-     * @param imageWidth width of the image
+     *
+     * @param imageWidth  width of the image
      * @param imageHeight height of the image
      * @return amount of tiles produced by {@link #tile()}
      */
@@ -211,9 +227,10 @@ public class MCRImage {
 
     /**
      * returns a {@link File} object of the .iview2 file or the derivate folder.
-     * @param tileDir the base directory of all image tiles
+     *
+     * @param tileDir    the base directory of all image tiles
      * @param derivateID the derivate ID the image belongs to
-     * @param imagePath the relative path from the derivate root to the image
+     * @param imagePath  the relative path from the derivate root to the image
      * @return tile directory of derivate if <code>imagePath</code> is null or the tile file (.iview2)
      */
     public static Path getTiledFile(final Path tileDir, final String derivateID, final String imagePath) {
@@ -255,6 +272,7 @@ public class MCRImage {
 
     /**
      * returns the tile size dimensions.
+     *
      * @return width and height of a full tile
      */
     @SuppressWarnings("unused")
@@ -287,21 +305,33 @@ public class MCRImage {
 
     /**
      * Reads a rectangular area of the current image.
+     *
      * @param reader image reader with current image at pos 0
-     * @param x upper left x-coordinate
-     * @param y upper left y-coordinate
-     * @param width width of the area of interest
+     * @param x      upper left x-coordinate
+     * @param y      upper left y-coordinate
+     * @param width  width of the area of interest
      * @param height height of the area of interest
      * @return area of interest
      * @throws IOException if source file could not be read
      */
     protected static BufferedImage getTileOfFile(final ImageReader reader, final int x, final int y, final int width,
-        final int height) throws IOException {
+        final int height, MCROrientation orientation, final int imageWidth, final int imageHeight) throws IOException {
         final ImageReadParam param = reader.getDefaultReadParam();
         final Rectangle srcRegion = new Rectangle(x, y, width, height);
-        param.setSourceRegion(srcRegion);
+        final Rectangle physicalRegion = MCROrientationUtils.toPhysical(imageWidth, imageHeight, srcRegion,
+            orientation);
+        param.setSourceRegion(physicalRegion);
         BufferedImage tile = reader.read(0, param);
-        return convertIfNeeded(tile);
+        final BufferedImage transformInput = convertIfNeeded(tile);
+        return MCROrientationUtils.getPhysicalToLogicalTransformation(orientation, physicalRegion.width,
+                physicalRegion.height)
+            .map(trans -> new AffineTransformOp(trans, AffineTransformOp.TYPE_BILINEAR))
+            .map(op -> op.filter(transformInput, getBufferedImage(transformInput, srcRegion)))
+            .orElse(transformInput);
+    }
+
+    private static BufferedImage getBufferedImage(BufferedImage transformInput, Rectangle srcRegion) {
+        return new BufferedImage(srcRegion.width, srcRegion.height, transformInput.getType());
     }
 
     protected static int getBufferedImageType(final ImageReader reader) throws IOException {
@@ -382,8 +412,8 @@ public class MCRImage {
     /**
      * Returns the type of the given image
      * @param imageReader with an image on index 0
-     * @throws IOException while reading image
      * @return a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
+     * @throws IOException while reading image
      */
     @SuppressWarnings("unused")
     public static int getImageType(final ImageReader imageReader) throws IOException {
@@ -436,7 +466,7 @@ public class MCRImage {
 
     /**
      * @param image image to get the image type from
-     * @return  a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
+     * @return a {@link BufferedImage#getType()} response, where BufferedImage.TYPE_CUSTOM is translated to compatible image type.
      */
     public static int getImageType(BufferedImage image) {
         return getImageType(image.getColorModel());
@@ -465,6 +495,7 @@ public class MCRImage {
 
     /**
      * set directory of the generated .iview2 file.
+     *
      * @param tileDir a base directory where all tiles of all derivates are stored
      */
     public void setTileDir(final Path tileDir) {
@@ -475,8 +506,8 @@ public class MCRImage {
      * starts the tile process.
      * <p>
      * Same as calling {@link #tile(MCRTileEventHandler)} with <code>null</code> as argument.
-     * 
-     * @return properties of image and generated tiles  
+     *
+     * @return properties of image and generated tiles
      * @throws IOException that occurs during tile process
      */
     public MCRTiledPictureProps tile() throws IOException {
@@ -485,15 +516,15 @@ public class MCRImage {
 
     /**
      * starts the tile process.
-     * 
-     * @param eventHandler
-     *          eventHandler to control resources, may be null
-     * @return properties of image and generated tiles  
+     *
+     * @param eventHandler eventHandler to control resources, may be null
+     * @return properties of image and generated tiles
      * @throws IOException that occurs during tile process
      */
     public MCRTiledPictureProps tile(MCRTileEventHandler eventHandler) throws IOException {
         long start = System.nanoTime();
         LOGGER.info(String.format(Locale.ENGLISH, "Start tiling of %s:%s", derivate, imagePath));
+        setOrientation();
         //waterMarkFile = ImageIO.read(new File(MCRIview2Props.getProperty("Watermark")));	
         //initialize some basic variables
         if (eventHandler != null) {
@@ -531,8 +562,31 @@ public class MCRImage {
         return imageProperties;
     }
 
+    private void setOrientation() {
+        short orientation = 1;
+        try {
+            Metadata metadata = ImageMetadataReader.readMetadata(imageFile.toFile());
+            ExifIFD0Directory exifIFD0Directory = metadata.getFirstDirectoryOfType(ExifIFD0Directory.class);
+            if (exifIFD0Directory != null) {
+                LOGGER.info("Exif Directory found.");
+                orientation = (short) exifIFD0Directory.getInt(ExifIFD0Directory.TAG_ORIENTATION);
+            }
+        } catch (IOException | ImageProcessingException ioe) {
+            LOGGER.error("Error while reading image orientation.", ioe);
+        } catch (MetadataException ex) {
+            //no orientation defined;
+        }
+        this.orientation = MCROrientation.fromExifOrientation(orientation);
+        LOGGER.info("Orientation for " + this.imageFile + ": " + this.orientation.name());
+    }
+
+    protected MCROrientation getOrientation() {
+        return orientation;
+    }
+
     protected void doTile(final ImageReader imageReader, final ZipOutputStream zout) throws IOException {
-        BufferedImage image = getTileOfFile(imageReader, 0, 0, getImageWidth(), getImageHeight());
+        BufferedImage image = getTileOfFile(imageReader, 0, 0, getImageWidth(), getImageHeight(),
+            getOrientation(), getImageWidth(), getImageHeight());
         final int zoomLevels = getZoomLevels(getImageWidth(), getImageHeight());
         LOGGER.info("Will generate {} zoom levels.", zoomLevels);
         for (int z = zoomLevels; z >= 0; z--) {
@@ -582,7 +636,8 @@ public class MCRImage {
      *   height=""
      *   zoomLevel=""
      * /&gt;
-     * </pre>  
+     * </pre>
+     *
      * @param zout ZipOutputStream of <code>.iview2</code> file
      * @throws IOException Exception during ZIP output
      */
@@ -604,16 +659,16 @@ public class MCRImage {
 
     /**
      * writes image tile to <code>.iview2</code> file.
+     *
      * @param zout ZipOutputStream of <code>.iview2</code> file
      * @param tile image tile to be written
-     * @param x x coordinate of tile in current zoom level (x * tile width = x-pixel)
-     * @param y y coordinate of tile in current zoom level (y * tile width = y-pixel)
-     * @param z zoom level
+     * @param x    x coordinate of tile in current zoom level (x * tile width = x-pixel)
+     * @param y    y coordinate of tile in current zoom level (y * tile width = y-pixel)
+     * @param z    zoom level
      * @throws IOException Exception during ZIP output
      */
     protected void writeTile(final ZipOutputStream zout, final BufferedImage tile, final int x, final int y,
-        final int z)
-        throws IOException {
+        final int z) throws IOException {
         if (tile != null) {
             try {
                 String tileName = Integer.toString(z) + '/' + y + '/' + x + ".jpg";
@@ -645,8 +700,9 @@ public class MCRImage {
 
     /**
      * creates a {@link ZipOutputStream} to write image tiles and metadata to.
+     *
      * @return write ready ZIP output stream
-     * @throws IOException while creating parent directories of tile file
+     * @throws IOException           while creating parent directories of tile file
      * @throws FileNotFoundException if tile directory or image file does not exist and cannot be created
      */
     private ZipOutputStream getZipOutputStream() throws IOException {
@@ -661,17 +717,35 @@ public class MCRImage {
     }
 
     /**
+     * Determines if this image is laying on its side based on its orientation.
+     *
+     * @return true if the image is laying on its side, false otherwise
+     */
+    private boolean isLayingOnTheSide() {
+        return switch (orientation) {
+            case TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT -> false;
+            case LEFT_TOP, LEFT_BOTTOM, RIGHT_TOP, RIGHT_BOTTOM -> true;
+        };
+    }
+
+    /**
      * sets the image height.
+     *
      * @param imgHeight height of the image
      */
     private void setImageHeight(final int imgHeight) {
-        imageHeight = imgHeight;
+        imagePhysicalHeight = imgHeight;
+        if (isLayingOnTheSide()) {
+            imageWidth = imgHeight;
+        } else {
+            imageHeight = imgHeight;
+        }
     }
 
     /**
      * Set the image size.
      * Maybe the hole image will be read into RAM for getWidth() and getHeight().
-     * 
+     *
      * @param imgReader image reader with image position '0' to get the image dimensions
      * @throws IOException while reading the source image
      */
@@ -683,14 +757,21 @@ public class MCRImage {
 
     /**
      * sets the image width.
+     *
      * @param imgWidth width of the image
      */
     private void setImageWidth(final int imgWidth) {
-        imageWidth = imgWidth;
+        imagePhysicalWidth = imgWidth;
+        if (isLayingOnTheSide()) {
+            imageHeight = imgWidth;
+        } else {
+            imageWidth = imgWidth;
+        }
     }
 
     /**
      * sets the image zoom levels.
+     *
      * @param imgZoomLevels amount of zoom levels of the image
      */
     private void setImageZoomLevels(final int imgZoomLevels) {
@@ -765,4 +846,5 @@ public class MCRImage {
         }
 
     }
+
 }
