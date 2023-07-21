@@ -3,7 +3,7 @@ name: Java CI
 on: [ push, pull_request ]
 
 env:
-  MAVEN_OPTS: -Xmx1024M -Xss128M -XX:+CMSClassUnloadingEnabled
+  MAVEN_OPTS: -Xmx1024M -Xss128M
 
 jobs:
   build:
