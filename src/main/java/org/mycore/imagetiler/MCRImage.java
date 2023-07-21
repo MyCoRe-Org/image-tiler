@@ -26,7 +26,6 @@ import java.awt.image.ColorConvertOp;
 import java.awt.image.ColorModel;
 import java.awt.image.IndexColorModel;
 import java.io.BufferedOutputStream;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.ByteChannel;
@@ -72,7 +71,7 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 /**
  * The <code>MCRImage</code> class describes an image with different zoom levels that can be accessed by its tiles.
  * <p>
- * The main purpose of this class is to provide a method to {@link #tile()} an image {@link File} of a MyCoRe derivate.
+ * The main purpose of this class is to provide a method to {@link #tile()} an image {@link Path} of a MyCoRe derivate.
  * <p>
  * The resulting file of the tile process is a standard ZIP file with the suffix <code>.iview2</code>. 
  * Use {@link #setTileDir(Path)} to specify a common directory where all images of all derivates are tiled. The resulting IView2 file
@@ -226,7 +225,7 @@ public class MCRImage {
     }
 
     /**
-     * returns a {@link File} object of the .iview2 file or the derivate folder.
+     * returns a {@link Path} object of the .iview2 file or the derivate folder.
      *
      * @param tileDir    the base directory of all image tiles
      * @param derivateID the derivate ID the image belongs to
@@ -563,9 +562,10 @@ public class MCRImage {
     }
 
     private void setOrientation() {
+        long start = System.nanoTime();
         short orientation = 1;
-        try {
-            Metadata metadata = ImageMetadataReader.readMetadata(imageFile.toFile());
+        try (var is = Files.newInputStream(imageFile)) {
+            Metadata metadata = ImageMetadataReader.readMetadata(is, Files.size(imageFile));
             ExifIFD0Directory exifIFD0Directory = metadata.getFirstDirectoryOfType(ExifIFD0Directory.class);
             if (exifIFD0Directory != null) {
                 LOGGER.info("Exif Directory found.");
@@ -577,7 +577,8 @@ public class MCRImage {
             //no orientation defined;
         }
         this.orientation = MCROrientation.fromExifOrientation(orientation);
-        LOGGER.info("Orientation for " + this.imageFile + ": " + this.orientation.name());
+        long end = System.nanoTime();
+        LOGGER.info("Orientation for {}: {} ({} ms)", this.imageFile, this.orientation.name(), (end - start) / 1e6);
     }
 
     protected MCROrientation getOrientation() {
