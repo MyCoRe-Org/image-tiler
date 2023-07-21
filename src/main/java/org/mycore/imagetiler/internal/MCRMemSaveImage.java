@@ -33,7 +33,7 @@ import org.mycore.imagetiler.MCRImage;
 /**
  * Uses a special fast and memory saving algorithm to tile images.
  * Upper memory usage for 4GP images is about 280 MB (was 28GB),
- * 68GP would take up to 1.1 GB (was 476 GB) and and 1TP images 4.4 GB (was 7 TB).
+ * 68GP would take up to 1.1 GB (was 476 GB) and 1TP images 4.4 GB (was 7 TB).
  *
  * @author Thomas Scheffler (yagee)
  * @author Matthias Eichner
