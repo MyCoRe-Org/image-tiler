@@ -87,7 +87,7 @@ public class MCRImageTest {
      */
     @Before
     public void setUp() throws IOException {
-        Path testFilesDir = Path.of("src").resolve("test").resolve("resources");
+        Path testFilesDir = Path.of("src", "test", "resources");
         final Path landscapeZip = testFilesDir.resolve("landscape.zip");
         landscapeZipFS = FileSystems.newFileSystem(landscapeZip, this.getClass().getClassLoader());
         pics.put("small", testFilesDir.resolve("Bay_of_Noboto.jpg"));
@@ -246,6 +246,18 @@ public class MCRImageTest {
         assertEquals("Path to file is not es axpected.", pExpected, tiledFile);
         tiledFile = MCRImage.getTiledFile(tileDir, derivateID, "/foo/bar.tif");
         assertEquals("Path to file is not es axpected.", pExpected, tiledFile);
+    }
+
+    @Test
+    public void testGetTiledFileWithoutMCR() throws IOException {
+        Path firstImage = pics.values().stream().findFirst().get().toAbsolutePath();
+        Path baseDir = firstImage.getParent().getParent().toAbsolutePath();
+        Path targetDir = Path.of("target");
+        Path imageFile = baseDir.relativize(firstImage);
+        MCRImage image = MCRImage.getInstance(baseDir, imageFile, targetDir);
+        Path tiledFile = MCRImage.getTiledFile(targetDir, null, imageFile.toString());
+        image.tile();
+        assertTrue("Tiled file is not present " + tiledFile, Files.exists(tiledFile));
     }
 
 }
