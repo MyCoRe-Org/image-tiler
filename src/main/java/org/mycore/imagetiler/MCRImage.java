@@ -35,6 +35,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import java.util.zip.ZipEntry;
@@ -206,6 +207,33 @@ public class MCRImage {
     }
 
     /**
+     * returns an instance of MCRImage (or subclass) based on the provided parameters.
+     *
+     * @param baseDir   the base directory where the image is located
+     * @param file      the image file
+     * @param targetDir the target directory where the tiled image should be saved
+     * @return a new instance of MCRImage representing <code>file</code>
+     */
+    public static MCRImage getInstance(final Path baseDir, final Path file, final Path targetDir) {
+        Path imageFile = safeResolve(baseDir, file);
+        String relImagePath = baseDir.toAbsolutePath().relativize(imageFile).toString();
+        MCRMemSaveImage image = new MCRMemSaveImage(imageFile, null, relImagePath);
+        image.setTileDir(targetDir);
+        return image;
+    }
+
+    public static Path safeResolve(Path basePath, Path resolve) {
+        Path absoluteBasePath = Objects.requireNonNull(basePath).toAbsolutePath();
+        final Path resolved = absoluteBasePath
+            .resolve(Objects.requireNonNull(resolve))
+            .normalize();
+        if (resolved.startsWith(absoluteBasePath.normalize())) {
+            return resolved;
+        }
+        throw new IllegalArgumentException("Bad path: " + resolve);
+    }
+
+    /**
      * calculates the amount of tiles produces by this image dimensions.
      *
      * @param imageWidth  width of the image
@@ -233,9 +261,7 @@ public class MCRImage {
      * @return tile directory of derivate if <code>imagePath</code> is null or the tile file (.iview2)
      */
     public static Path getTiledFile(final Path tileDir, final String derivateID, final String imagePath) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("tileDir: {}, derivate: {}, imagePath: {}", tileDir, derivateID, imagePath);
-        }
+        LOGGER.debug("tileDir: {}, derivate: {}, imagePath: {}", tileDir, derivateID, imagePath);
         Path tileFile = getTiledFileBaseDir(tileDir, derivateID);
         if (imagePath == null) {
             return tileFile;
@@ -513,6 +539,13 @@ public class MCRImage {
         return tile(null);
     }
 
+    private String getName() {
+        if (derivate != null) {
+            return derivate + ":" + imagePath;
+        }
+        return imageFile.toString();
+    }
+
     /**
      * starts the tile process.
      *
@@ -522,7 +555,7 @@ public class MCRImage {
      */
     public MCRTiledPictureProps tile(MCRTileEventHandler eventHandler) throws IOException {
         long start = System.nanoTime();
-        LOGGER.info(String.format(Locale.ENGLISH, "Start tiling of %s:%s", derivate, imagePath));
+        LOGGER.info(String.format(Locale.ENGLISH, "Start tiling of %s", getName()));
         setOrientation();
         //waterMarkFile = ImageIO.read(new File(MCRIview2Props.getProperty("Watermark")));	
         //initialize some basic variables
@@ -556,8 +589,8 @@ public class MCRImage {
         final MCRTiledPictureProps imageProperties = getImageProperties();
         long pixel = (long) imageProperties.getWidth() * imageProperties.getHeight();
         LOGGER.info(() -> String.format(Locale.ENGLISH,
-            "Finished tiling of %s:%s in %.0f ms (%d MPixel/s). ",
-            derivate, imagePath, (end - start) / 1e6, 1000 * pixel / (end - start)));
+            "Finished tiling of %s in %.0f ms (%d MPixel/s). ",
+            getName(), (end - start) / 1e6, 1000 * pixel / (end - start)));
         return imageProperties;
     }
 
