@@ -103,8 +103,7 @@ public class MCROrientationUtils {
             }
             case RIGHT_BOTTOM -> {
                 affineTransform.scale(-1.0, 1.0);
-                affineTransform.translate(-height, 0);
-                affineTransform.translate(0, width);
+                affineTransform.translate(-height, width);
                 affineTransform.rotate(Math.toRadians(270));
             }
             case LEFT_BOTTOM -> {
