@@ -603,6 +603,10 @@ public class MCRImage {
             if (exifIFD0Directory != null) {
                 LOGGER.info("Exif Directory found.");
                 orientation = (short) exifIFD0Directory.getInt(ExifIFD0Directory.TAG_ORIENTATION);
+                if (!MCROrientation.isValid(orientation)) {
+                    LOGGER.warn("Invalid orientation tag value: " + orientation);
+                    orientation = (short) MCROrientation.TOP_LEFT.getExifOrientation();
+                }
             }
         } catch (IOException | ImageProcessingException ioe) {
             LOGGER.error("Error while reading image orientation.", ioe);

@@ -96,7 +96,7 @@ public enum MCROrientation {
      * @throws IllegalStateException    if the Orientation values are not in order.
      */
     public static MCROrientation fromExifOrientation(int exifOrientation) {
-        if (exifOrientation < 1 || exifOrientation > 8) {
+        if (!isValid(exifOrientation)) {
             throw new IllegalArgumentException("Invalid value " + exifOrientation);
         }
         MCROrientation value = values()[exifOrientation - 1];
@@ -104,6 +104,10 @@ public enum MCROrientation {
             throw new IllegalStateException("Values are not in order");
         }
         return value;
+    }
+
+    public static boolean isValid(int exifOrientation) {
+        return exifOrientation > 0 && exifOrientation < 9;
     }
 
     @Override
