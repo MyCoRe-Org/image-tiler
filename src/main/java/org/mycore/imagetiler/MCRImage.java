@@ -20,11 +20,15 @@ package org.mycore.imagetiler;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.color.ColorSpace;
+import java.awt.color.ICC_ColorSpace;
+import java.awt.color.ICC_ProfileGray;
 import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
 import java.awt.image.ColorModel;
 import java.awt.image.IndexColorModel;
+import java.awt.image.RescaleOp;
 import java.io.BufferedOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -124,6 +128,9 @@ public class MCRImage {
     private static final double ZOOM_FACTOR = 0.5;
 
     private static final ColorConvertOp COLOR_CONVERT_OP = new ColorConvertOp(null);
+    private static final ColorConvertOp SRGB_COLOR_CONVERT_OP
+        = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_sRGB), null);
+    public static final float DEFAULT_GAMMA = 1F;
 
     /**
      * derivate ID (for output directory calculation).
@@ -390,8 +397,33 @@ public class MCRImage {
         }
         final BufferedImage newTile = new BufferedImage(tile.getWidth(), tile.getHeight(),
             convertToGray ? BufferedImage.TYPE_BYTE_GRAY : BufferedImage.TYPE_INT_RGB);
+        if (colorModel.getNumColorComponents() == 1) {
+            //convert to sRGB first and than to grayscale to handle gamma correction
+            BufferedImage midStep = new BufferedImage(tile.getWidth(), tile.getHeight(), BufferedImage.TYPE_INT_RGB);
+            SRGB_COLOR_CONVERT_OP.filter(tile, midStep);
+            float gamma = getGamma(tile.getColorModel().getColorSpace());
+            if (gamma != DEFAULT_GAMMA) {
+                gammaCorrection(gamma, midStep, newTile);
+                return newTile;
+            }
+        }
         COLOR_CONVERT_OP.filter(tile, newTile);
         return newTile;
+    }
+
+    private static float getGamma(ColorSpace colorSpace) {
+        if (colorSpace instanceof ICC_ColorSpace iccColorSpace
+            && iccColorSpace.getProfile() instanceof ICC_ProfileGray grayProfile) {
+            return grayProfile.getGamma();
+        }
+        return DEFAULT_GAMMA;
+    }
+
+    private static void gammaCorrection(float gamma, BufferedImage source, BufferedImage target) {
+        LOGGER.info("Correcting gamma {}.", gamma);
+        float gammaCorrectionFactor = (float) Math.pow(1 / gamma, -1);
+        RescaleOp rop = new RescaleOp(gammaCorrectionFactor, 0, null);
+        rop.filter(source, target);
     }
 
     /**
