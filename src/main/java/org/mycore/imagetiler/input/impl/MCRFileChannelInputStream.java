@@ -29,7 +29,7 @@ import javax.imageio.stream.ImageInputStreamImpl;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Cannot copy FileChannel!")
-public class MCRFileChannelInputStream extends ImageInputStreamImpl {
+public final class MCRFileChannelInputStream extends ImageInputStreamImpl {
     private FileChannel input;
 
     private long mappedPos, mappedUpperBound;
