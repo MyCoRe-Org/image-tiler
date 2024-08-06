@@ -17,42 +17,55 @@
  */
 package org.mycore.imagetiler;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+import java.awt.image.DataBufferUShort;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.nio.channels.ByteChannel;
 import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.ImageOutputStream;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.apache.logging.log4j.LogManager;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.w3c.dom.Document;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Provides a good test case for {@link MCRImage}.
@@ -233,6 +246,98 @@ public class MCRImageTest {
             }
         }
         return stripes;
+    }
+
+    @Test
+    public void testGamma() throws IOException, InterruptedException {
+        System.getProperties().forEach((k, v) -> System.out.println(k + "=" + v));
+        Path testFilesDir = Path.of("src", "test", "resources");
+        final Path file = testFilesDir.resolve("Gray Gamma 2.2.tif").toAbsolutePath();
+        final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
+        image.tile();
+        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("Gray Gamma 2.2.iview2"))) {
+            Path root = iviewFS.getRootDirectories().iterator().next();
+            Path thumbnailPath = root.resolve("0/0/0.jpg");
+            BufferedImage thumbnail = getBufferedImage(thumbnailPath);
+            int averageBrightness = getAverageBrightness(thumbnail);
+            BufferedImage original = getBufferedImage(file);
+            int averageBrightnessOrig = getAverageBrightness(original);
+            int averageBrightnessThumb = (int) (averageBrightness
+                * Math.pow(2, original.getColorModel().getPixelSize() - thumbnail.getColorModel().getPixelSize()));
+            //pixel count does not match between original and thumbnail
+            //also brightness resolution is not the same, average error should be below 2%
+            int marginOfError = (int) (Math.pow(2, original.getColorModel().getPixelSize()) * 0.02);
+            assertTrue("Brightness after gamma correction does not match.",
+                areNearlyEqual(averageBrightnessOrig, averageBrightnessThumb, marginOfError));
+        }
+
+    }
+
+    public static boolean areNearlyEqual(int value1, int value2, int marginOfError) {
+        return Math.abs(value1 - value2) <= marginOfError;
+    }
+
+    private BufferedImage getBufferedImage(Path imagePath) throws IOException {
+        try (ByteChannel bc = Files.newByteChannel(imagePath, StandardOpenOption.READ);
+            ImageInputStream imageInputStream = ImageIO.createImageInputStream(bc)) {
+            final Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInputStream);
+            if (!readers.hasNext()) {
+                throw new IOException("Could not read image, no image reader available");
+            }
+            final ImageReader reader = readers.next();
+            reader.setInput(imageInputStream, false, true);
+            try {
+                return reader.read(0);
+            } finally {
+                reader.dispose();
+            }
+        }
+    }
+
+    public static int getAverageBrightness(BufferedImage image) {
+        double totalBrightness;
+
+        if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
+            final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+            totalBrightness = IntStream.range(0, pixels.length)
+                .map(i -> pixels[i] & 0xFF) // Convert to unsigned
+                .average()
+                .orElse(0);
+        } else if (image.getType() == BufferedImage.TYPE_USHORT_GRAY) {
+            final short[] pixels = ((DataBufferUShort) image.getRaster().getDataBuffer()).getData();
+            totalBrightness = IntStream.range(0, pixels.length)
+                .map(i -> pixels[i] & 0xFFFF) // Convert to unsigned
+                .average()
+                .orElse(0);
+        } else {
+            throw new IllegalArgumentException("Unsupported image type for grayscale processing");
+        }
+
+        return (int) totalBrightness;
+    }
+
+    public static FileSystem getFileSystem(Path iviewFile) throws IOException {
+        URI uri = URI.create("jar:" + iviewFile.toUri());
+        try {
+            return FileSystems.newFileSystem(uri, Collections.emptyMap(), MCRImageTest.class.getClassLoader());
+        } catch (FileSystemAlreadyExistsException exc) {
+            // block until file system is closed
+            try {
+                FileSystem fileSystem = FileSystems.getFileSystem(uri);
+                while (fileSystem.isOpen()) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException ie) {
+                        // get out of here
+                        throw new IOException(ie);
+                    }
+                }
+            } catch (FileSystemNotFoundException fsnfe) {
+                // seems closed now -> do nothing and try to return the file system again
+                LogManager.getLogger().debug("Filesystem not found", fsnfe);
+            }
+            return getFileSystem(iviewFile);
+        }
     }
 
     @Test
