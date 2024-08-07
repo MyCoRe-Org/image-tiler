@@ -21,9 +21,16 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.awt.Color;
+import java.awt.RenderingHints;
+import java.awt.Transparency;
+import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-import java.awt.image.DataBufferUShort;
+import java.awt.image.ColorConvertOp;
+import java.awt.image.ColorModel;
+import java.awt.image.ComponentColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -46,6 +53,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -114,7 +122,7 @@ public class MCRImageTest {
         pics.put("exif-orientation", landscapeZipFS.getPath("landscape_2.jpg"));
         pics.put("tiff-orientation", landscapeZipFS.getPath("landscape_7.tiff"));
         tileDir = Paths.get("target/tileDir");
-        System.setProperty("java.awt.headless", "true");
+        //System.setProperty("java.awt.headless", "true");
     }
 
     /**
@@ -250,7 +258,6 @@ public class MCRImageTest {
 
     @Test
     public void testGamma() throws IOException, InterruptedException {
-        System.getProperties().forEach((k, v) -> System.out.println(k + "=" + v));
         Path testFilesDir = Path.of("src", "test", "resources");
         final Path file = testFilesDir.resolve("Gray Gamma 2.2.tif").toAbsolutePath();
         final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
@@ -258,9 +265,9 @@ public class MCRImageTest {
         try (FileSystem iviewFS = getFileSystem(tileDir.resolve("Gray Gamma 2.2.iview2"))) {
             Path root = iviewFS.getRootDirectories().iterator().next();
             Path thumbnailPath = root.resolve("0/0/0.jpg");
-            BufferedImage thumbnail = getBufferedImage(thumbnailPath);
+            BufferedImage thumbnail = getBufferedImage(thumbnailPath, false);
             int averageBrightness = getAverageBrightness(thumbnail);
-            BufferedImage original = getBufferedImage(file);
+            BufferedImage original = getBufferedImage(file, false);
             int averageBrightnessOrig = getAverageBrightness(original);
             int averageBrightnessThumb = (int) (averageBrightness
                 * Math.pow(2, original.getColorModel().getPixelSize() - thumbnail.getColorModel().getPixelSize()));
@@ -270,14 +277,44 @@ public class MCRImageTest {
             assertTrue("Brightness after gamma correction does not match.",
                 areNearlyEqual(averageBrightnessOrig, averageBrightnessThumb, marginOfError));
         }
+    }
 
+    @Test
+    public void testGamma50() throws IOException, InterruptedException {
+        Path testFilesDir = Path.of("src", "test", "resources");
+        final Path file = testFilesDir.resolve("50 Gray Gamma 2.2.tif").toAbsolutePath();
+        final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
+        image.tile();
+        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("50 Gray Gamma 2.2.iview2"))) {
+            Path root = iviewFS.getRootDirectories().iterator().next();
+            Path thumbnailPath = root.resolve("0/0/0.jpg");
+            BufferedImage thumbnail = getBufferedImage(thumbnailPath, false);
+            Path topTilePath = root.resolve("5/0/0.jpg");
+            BufferedImage topTile = getBufferedImage(topTilePath, false);
+            BufferedImage original = getBufferedImage(file, true);
+            int averageBrightnessOrig = getAverageBrightness(original);
+            int averageBrightnessThumb = getAverageBrightness(thumbnail);
+            int averageBrightnessTop = getAverageBrightness(topTile);
+            int averageBrightnessThumbAdj = (int) (averageBrightnessThumb
+                * Math.pow(2, original.getColorModel().getPixelSize() - thumbnail.getColorModel().getPixelSize()));
+            assertEquals(averageBrightnessThumb,averageBrightnessTop);
+            //pixel count does not match between original and thumbnail
+            //also brightness resolution is not the same, average error should be below 2%
+            assertEquals(((int) Math.pow(2, thumbnail.getColorModel().getPixelSize()) / 2), averageBrightnessThumb);
+            //marginOfError=2 due to rounding errors in color conversion
+            assertTrue(areNearlyEqual((int) (Math.pow(2, original.getColorModel().getPixelSize()) / 2),
+                averageBrightnessOrig, 2));
+            int marginOfError = (int) (Math.pow(2, original.getColorModel().getPixelSize()) * 0.02);
+            assertTrue("Brightness after gamma correction does not match.",
+                areNearlyEqual(averageBrightnessOrig, averageBrightnessThumbAdj, marginOfError));
+        }
     }
 
     public static boolean areNearlyEqual(int value1, int value2, int marginOfError) {
         return Math.abs(value1 - value2) <= marginOfError;
     }
 
-    private BufferedImage getBufferedImage(Path imagePath) throws IOException {
+    private BufferedImage getBufferedImage(Path imagePath, boolean normalize) throws IOException {
         try (ByteChannel bc = Files.newByteChannel(imagePath, StandardOpenOption.READ);
             ImageInputStream imageInputStream = ImageIO.createImageInputStream(bc)) {
             final Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInputStream);
@@ -287,7 +324,42 @@ public class MCRImageTest {
             final ImageReader reader = readers.next();
             reader.setInput(imageInputStream, false, true);
             try {
-                return reader.read(0);
+                BufferedImage image = reader.read(0);
+                if (normalize) {
+                    // getRGB() actually means "getSRGB()"
+                    // color value:
+                    // Integer.toHexString(image.getRGB(0, 0))
+                    // raw value:
+                    // Integer.toHexString(image.getData().getSample(0, 0, 0))
+
+                    // Color conversion to sRGB with 48 Bit
+                    // Copy Color Raster R=G=B -> Gray
+                    RenderingHints hints = new RenderingHints(Map.of(
+                        RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY,
+                        RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_DISABLE));
+                    ColorConvertOp colorConvertOp = new ColorConvertOp(hints);
+                    ColorSpace sRGB = ColorSpace.getInstance(ColorSpace.CS_sRGB);
+                    ColorModel cm
+                        = new ComponentColorModel(sRGB, false, false, Transparency.OPAQUE, DataBuffer.TYPE_USHORT);
+                    WritableRaster colorRaster
+                        = Raster.createInterleavedRaster(DataBuffer.TYPE_USHORT, image.getWidth(),
+                            image.getHeight(), 3, null);
+                    BufferedImage copyColor = new BufferedImage(cm, colorRaster, cm.isAlphaPremultiplied(), null);
+                    colorConvertOp.filter(image, copyColor);
+                    ColorSpace sGray = ColorSpace.getInstance(ColorSpace.CS_GRAY);
+                    ColorModel cmGray
+                        = new ComponentColorModel(sGray, false, false, Transparency.OPAQUE,
+                            image.getData().getTransferType());
+                    WritableRaster rasterGray
+                        = Raster.createInterleavedRaster(image.getData().getTransferType(), image.getWidth(),
+                            image.getHeight(), 1, null);
+                    for (int i = 0; i < image.getWidth() * image.getHeight(); i++) {
+                        int colorElement = colorRaster.getDataBuffer().getElem(0, i);
+                        rasterGray.getDataBuffer().setElem(i, colorElement);
+                    }
+                    return new BufferedImage(cmGray, rasterGray, cmGray.isAlphaPremultiplied(), null);
+                }
+                return image;
             } finally {
                 reader.dispose();
             }
@@ -295,25 +367,11 @@ public class MCRImageTest {
     }
 
     public static int getAverageBrightness(BufferedImage image) {
-        double totalBrightness;
-
-        if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
-            final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-            totalBrightness = IntStream.range(0, pixels.length)
-                .map(i -> pixels[i] & 0xFF) // Convert to unsigned
-                .average()
-                .orElse(0);
-        } else if (image.getType() == BufferedImage.TYPE_USHORT_GRAY) {
-            final short[] pixels = ((DataBufferUShort) image.getRaster().getDataBuffer()).getData();
-            totalBrightness = IntStream.range(0, pixels.length)
-                .map(i -> pixels[i] & 0xFFFF) // Convert to unsigned
-                .average()
-                .orElse(0);
-        } else {
-            throw new IllegalArgumentException("Unsupported image type for grayscale processing");
-        }
-
-        return (int) totalBrightness;
+        return (int) IntStream
+            .of(image.getSampleModel().getSamples(0, 0, image.getWidth(), image.getHeight(), 0, (int[]) null,
+                image.getRaster().getDataBuffer()))
+            .average()
+            .orElse(0);
     }
 
     public static FileSystem getFileSystem(Path iviewFile) throws IOException {
