@@ -18,11 +18,7 @@
 package org.mycore.imagetiler;
 
 import java.awt.Graphics2D;
-import java.awt.Image;
 import java.awt.Rectangle;
-import java.awt.color.ColorSpace;
-import java.awt.color.ICC_ColorSpace;
-import java.awt.color.ICC_ProfileGray;
 import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
@@ -126,8 +122,6 @@ public class MCRImage {
 
     private static final ColorConvertOp COLOR_CONVERT_OP = new ColorConvertOp(null);
 
-    public static final float DEFAULT_GAMMA = 1F;
-
     /**
      * derivate ID (for output directory calculation).
      */
@@ -166,6 +160,8 @@ public class MCRImage {
     private int imageZoomLevels;
 
     private MCROrientation orientation;
+
+    private boolean converTilesToGray = false;
 
     static {
         imageWriteParam = new JPEGImageWriteParam(Locale.getDefault());
@@ -343,8 +339,8 @@ public class MCRImage {
      * @return area of interest
      * @throws IOException if source file could not be read
      */
-    protected static BufferedImage getTileOfFile(final ImageReader reader, final int x, final int y, final int width,
-        final int height, MCROrientation orientation, final int imageWidth, final int imageHeight) throws IOException {
+    protected BufferedImage getTileOfFile(final ImageReader reader, final int x, final int y, final int width,
+        final int height) throws IOException {
         final ImageReadParam param = reader.getDefaultReadParam();
         final Rectangle srcRegion = new Rectangle(x, y, width, height);
         final Rectangle physicalRegion = MCROrientationUtils.toPhysical(imageWidth, imageHeight, srcRegion,
@@ -373,37 +369,25 @@ public class MCRImage {
         return imageType == BufferedImage.TYPE_CUSTOM ? BufferedImage.TYPE_INT_RGB : imageType;
     }
 
-    private static BufferedImage convertIfNeeded(BufferedImage tile) {
+    private BufferedImage convertIfNeeded(BufferedImage tile) {
         ColorModel colorModel = tile.getColorModel();
         boolean convertToGray = isFakeGrayScale(colorModel) || colorModel.getNumColorComponents() == 1;
         int pixelSize = colorModel.getPixelSize();
-        int targetType = tile.getType();
         if (convertToGray) {
             LOGGER.info("Image is gray scale but uses color map. Converting to gray scale");
-            targetType = BufferedImage.TYPE_BYTE_GRAY;
+            converTilesToGray = true;
         } else if (pixelSize > JPEG_CM_PIXEL_SIZE) {
             LOGGER.info("Converting image to 24 bit color depth: Color depth {}", pixelSize);
-            targetType = BufferedImage.TYPE_INT_RGB;
         } else if (tile.getType() == BufferedImage.TYPE_CUSTOM) {
             LOGGER.info("Converting image to 24 bit color depth: Image type is 'CUSTOM'");
-            targetType = BufferedImage.TYPE_INT_RGB;
         }
-        if (targetType == tile.getType()) {
+        if (!convertToGray && BufferedImage.TYPE_INT_RGB == tile.getType()) {
             //no need for conversion
             return tile;
         }
-        final BufferedImage newTile = new BufferedImage(tile.getWidth(), tile.getHeight(),
-            convertToGray ? BufferedImage.TYPE_BYTE_GRAY : BufferedImage.TYPE_INT_RGB);
+        final BufferedImage newTile = new BufferedImage(tile.getWidth(), tile.getHeight(), BufferedImage.TYPE_INT_RGB);
         COLOR_CONVERT_OP.filter(tile, newTile);
         return newTile;
-    }
-
-    private static float getGamma(ColorSpace colorSpace) {
-        if (colorSpace instanceof ICC_ColorSpace iccColorSpace
-            && iccColorSpace.getProfile() instanceof ICC_ProfileGray grayProfile) {
-            return grayProfile.getGamma();
-        }
-        return DEFAULT_GAMMA;
     }
 
     /**
@@ -427,19 +411,19 @@ public class MCRImage {
 
     /**
      * Shrinks the image to 50%.
+     *
      * @param image source image
      * @return shrinked image
      */
-    protected static BufferedImage scaleBufferedImage(final BufferedImage image, boolean useScaledInstance) {
+    protected static BufferedImage scaleBufferedImage(final BufferedImage image) {
         LOGGER.debug("Scaling image...");
         final int width = image.getWidth();
         final int height = image.getHeight();
         final int newWidth = (int) Math.ceil(width / 2d);
         final int newHeight = (int) Math.ceil(height / 2d);
-        Image scaledImage = useScaledInstance ? image.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH) : null;
         final BufferedImage bicubic = new BufferedImage(newWidth, newHeight, getImageType(image));
         Graphics2D graphics = bicubic.createGraphics();
-        graphics.drawImage(useScaledInstance ? scaledImage : image, 0, 0, newWidth, newHeight, null);
+        graphics.drawImage(image, 0, 0, newWidth, newHeight, null);
         graphics.dispose();
         LOGGER.debug("Scaling done: {}x{}", width, height);
         return bicubic;
@@ -590,7 +574,7 @@ public class MCRImage {
             LOGGER.debug("ImageReader: {}", imageReader.getClass());
             try (ZipOutputStream zout = getZipOutputStream()) {
                 setImageSize(imageReader);
-                doTile(imageReader, zout, shouldApplyGammaCorrection(imageReader));
+                doTile(imageReader, zout);
                 writeMetaData(zout);
             } finally {
                 imageReader.dispose();
@@ -603,15 +587,6 @@ public class MCRImage {
             "Finished tiling of %s in %.0f ms (%d MPixel/s). ",
             getName(), (end - start) / 1e6, 1000 * pixel / (end - start)));
         return imageProperties;
-    }
-
-    private boolean shouldApplyGammaCorrection(ImageReader imageReader) throws IOException {
-        ColorModel colorModel = imageReader.getRawImageType(0).getColorModel();
-        if (colorModel.getNumColorComponents() == 1) {
-            float gamma = getGamma(colorModel.getColorSpace());
-            return (gamma != DEFAULT_GAMMA);
-        }
-        return false;
     }
 
     private void setOrientation() {
@@ -642,10 +617,9 @@ public class MCRImage {
         return orientation;
     }
 
-    protected void doTile(final ImageReader imageReader, final ZipOutputStream zout, boolean shouldApplyGammaCorrection)
+    protected void doTile(final ImageReader imageReader, final ZipOutputStream zout)
         throws IOException {
-        BufferedImage image = getTileOfFile(imageReader, 0, 0, getImageWidth(), getImageHeight(),
-            getOrientation(), getImageWidth(), getImageHeight());
+        BufferedImage image = getTileOfFile(imageReader, 0, 0, getImageWidth(), getImageHeight());
         final int zoomLevels = getZoomLevels(getImageWidth(), getImageHeight());
         LOGGER.info("Will generate {} zoom levels.", zoomLevels);
         for (int z = zoomLevels; z >= 0; z--) {
@@ -662,7 +636,7 @@ public class MCRImage {
                 }
             }
             if (z > 0) {
-                image = scaleBufferedImage(image, shouldApplyGammaCorrection && zoomLevels == z);
+                image = scaleBufferedImage(image);
             }
         }
     }
@@ -733,12 +707,20 @@ public class MCRImage {
                 String tileName = Integer.toString(z) + '/' + y + '/' + x + ".jpg";
                 final ZipEntry ze = new ZipEntry(tileName);
                 zout.putNextEntry(ze);
-                writeImageIoTile(zout, tile);
+                writeImageIoTile(zout, converTilesToGray ? toGray(tile) : tile);
                 imageTilesCount.incrementAndGet();
             } finally {
                 zout.closeEntry();
             }
         }
+    }
+
+    private BufferedImage toGray(BufferedImage image) {
+        BufferedImage gray = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+        Graphics2D graphics = gray.createGraphics();
+        graphics.drawImage(image, 0, 0, image.getWidth(), image.getHeight(), null);
+        graphics.dispose();
+        return gray;
     }
 
     private BufferedImage getTile(final BufferedImage image, final int x, final int y) {
