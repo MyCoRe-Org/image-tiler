@@ -66,12 +66,16 @@ public final class MCRFileChannelInputStream extends ImageInputStreamImpl {
      * <em>and</em> the garbage collector gets around to it. Mapped memory is not on the heap, so heap pressure
      * never triggers that collection - a few concurrently tiled large images could pin several GB that no heap
      * profiler would show. Copying into a fixed window keeps the footprint bounded and deterministic.
+     * <p>
+     * A window larger than {@link #WINDOW_SIZE} is only allocated for the typed <code>readFully</code> methods,
+     * which need the whole array in one piece. It is released again by the next fill that does not need it, so an
+     * oversized window never outlives the read that asked for it.
      */
     private void fill(long pos, int minLength) throws IOException {
         //align windows to fixed boundaries so that scattered reads within one region keep hitting the same window
         long start = pos - pos % WINDOW_SIZE;
         int capacity = Math.max(WINDOW_SIZE, (int) (pos - start) + minLength);
-        if (capacity > window.capacity()) {
+        if (capacity != window.capacity()) {
             window = ByteBuffer.allocate(capacity);
         }
         window.clear();
@@ -89,6 +93,7 @@ public final class MCRFileChannelInputStream extends ImageInputStreamImpl {
 
     @Override
     public int read() throws IOException {
+        checkClosed();
         bitOffset = 0;
         prepareRead(1);
 
@@ -111,8 +116,12 @@ public final class MCRFileChannelInputStream extends ImageInputStreamImpl {
             return 0;
         }
 
+        checkClosed();
         bitOffset = 0;
-        prepareRead(len);
+        if (len > WINDOW_SIZE) {
+            return readDirectly(b, off, len);
+        }
+        prepareRead(1);
         int bytesLeft = window.remaining();
 
         if (bytesLeft < 1) {
@@ -124,6 +133,28 @@ public final class MCRFileChannelInputStream extends ImageInputStreamImpl {
         window.get(b, off, len);
         streamPos += len;
         return len;
+    }
+
+    private int readDirectly(byte[] target, int off, int len) throws IOException {
+        long remaining = size - streamPos;
+        if (remaining < 1) {
+            return -1;
+        }
+        int readableLength = (int) Math.min(len, remaining);
+        ByteBuffer targetBuffer = ByteBuffer.wrap(target, off, readableLength);
+        int bytesRead = 0;
+        while (targetBuffer.hasRemaining()) {
+            int read = input.read(targetBuffer, streamPos + bytesRead);
+            if (read < 1) {
+                break;
+            }
+            bytesRead += read;
+        }
+        if (bytesRead < 1) {
+            return -1;
+        }
+        streamPos += bytesRead;
+        return bytesRead;
     }
 
     /**
@@ -157,6 +188,15 @@ public final class MCRFileChannelInputStream extends ImageInputStreamImpl {
         }
     }
 
+    /**
+     * Returns the size the underlying file had when this stream was constructed.
+     * <p>
+     * Unlike the "-1 if unknown" fallback of the {@link javax.imageio.stream.ImageInputStream} contract this always
+     * returns a length, and that length is a snapshot: bytes appended to the file after construction are neither
+     * reported here nor readable through this stream. Tiling reads an image that is complete on disk, so a fixed
+     * length keeps every bounds check consistent for the whole life of the stream - and it stays callable after
+     * {@link #close()}.
+     */
     @Override
     public long length() {
         return size;

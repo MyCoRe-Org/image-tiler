@@ -164,7 +164,10 @@ public class MCRImage {
     private boolean converTilesToGray = false;
 
     /**
-     * position the image input stream was at before any reader touched it, see {@link #reattachInput(ImageReader)}
+     * position the image input stream was at before any reader touched it, see {@link #reattachInput(ImageReader)}.
+     * Only {@link #tile(MCRTileEventHandler)} sets it, so a subclass that calls
+     * {@link #getTileOfFile(ImageReader, int, int, int, int)} outside of a running tile process works with the
+     * default 0.
      */
     private long inputStreamOrigin;
 
@@ -372,6 +375,11 @@ public class MCRImage {
      * <p>
      * Skipped for readers that flushed the stream past its origin - PNG does that after reading the header - because
      * those cannot be rewound. They are all pure Java readers and do not leak.
+     * <p>
+     * Note that <code>setInput</code> discards the complete reader state, not just that scanline buffer: after this
+     * call the reader is back in its initial state and no previously obtained reader state - image dimensions, image
+     * types, thumbnails - may be reused. Anything of that kind has to be read before the first re-attach and kept
+     * outside the reader.
      */
     private void reattachInput(final ImageReader reader) throws IOException {
         if (reader.getInput() instanceof ImageInputStream imageInputStream

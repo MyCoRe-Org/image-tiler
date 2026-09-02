@@ -20,9 +20,11 @@ package org.mycore.imagetiler.input.impl;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assume.assumeTrue;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -40,6 +42,8 @@ import org.junit.rules.TemporaryFolder;
  * smaller than the files used here and therefore has to be moved around repeatedly.
  */
 public class MCRFileChannelInputStreamTest {
+
+    private static final int WINDOW_SIZE = 64 * 1024;
 
     /**
      * Bigger than the window inside {@link MCRFileChannelInputStream}, so that all tests cross window boundaries.
@@ -82,6 +86,55 @@ public class MCRFileChannelInputStreamTest {
                 assertEquals("byte at " + pos, content[pos] & 0xff, stream.read());
                 assertEquals("position after reading at " + pos, pos + 1L, stream.getStreamPosition());
             }
+        }
+    }
+
+    @Test
+    public void readsLargeByteBlockDirectlyWithoutGrowingTheWindow() throws Exception {
+        try (MCRFileChannelInputStream stream = open()) {
+            int offset = 1234;
+            stream.seek(offset);
+            byte[] read = new byte[150 * 1024];
+            int bytesRead = stream.read(read);
+            assertEquals(read.length, bytesRead);
+            for (int i = 0; i < bytesRead; i++) {
+                assertEquals("byte " + i, content[offset + i], read[i]);
+            }
+            assertEquals(WINDOW_SIZE, windowCapacityOf(stream));
+        }
+    }
+
+    @Test
+    public void releasesTheOversizedWindowNeededForTypedReads() throws Exception {
+        try (MCRFileChannelInputStream stream = open()) {
+            int[] read = new int[45 * 1024];
+            stream.readFully(read, 0, read.length);
+            ByteBuffer expected = ByteBuffer.wrap(content).order(stream.getByteOrder());
+            for (int i = 0; i < read.length; i++) {
+                assertEquals("int " + i, expected.getInt(i * Integer.BYTES), read[i]);
+            }
+            //the window had to hold all 180 KiB at once, but must not stay that big
+            assertEquals(WINDOW_SIZE, windowCapacityOf(stream));
+        }
+    }
+
+    private static int windowCapacityOf(MCRFileChannelInputStream stream) throws ReflectiveOperationException {
+        Field windowField = MCRFileChannelInputStream.class.getDeclaredField("window");
+        windowField.setAccessible(true);
+        return ((ByteBuffer) windowField.get(stream)).capacity();
+    }
+
+    @Test
+    public void doesNotReadBytesAppendedAfterOpening() throws IOException {
+        Path file = writeTestFile();
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ);
+            MCRFileChannelInputStream stream = new MCRFileChannelInputStream(channel)) {
+            Files.write(file, new byte[WINDOW_SIZE], StandardOpenOption.APPEND);
+            stream.seek(FILE_SIZE - 8L);
+            byte[] read = new byte[WINDOW_SIZE + 1];
+            assertEquals(8, stream.read(read));
+            assertEquals(FILE_SIZE, stream.getStreamPosition());
+            assertEquals(-1, stream.read(read));
         }
     }
 
@@ -170,5 +223,31 @@ public class MCRFileChannelInputStreamTest {
         MCRFileChannelInputStream stream = open();
         stream.close();
         assertEquals(FILE_SIZE, stream.length());
+    }
+
+    /**
+     * Relies on sparse files: only the very last byte is written, the 2 GiB before it stay unallocated. A file system
+     * without sparse support (NTFS by default, some CI overlay mounts) turns this into a real 2 GiB write, so the
+     * test is skipped unless the temporary folder could hold the file even then.
+     */
+    @Test
+    public void readsAcrossIntegerMaxValueBoundary() throws IOException {
+        Path file = folder.newFile("large-content.bin").toPath();
+        long fileSize = (long) Integer.MAX_VALUE + WINDOW_SIZE;
+        assumeTrue("no room for a 2 GiB file without sparse file support",
+            Files.getFileStore(file).getUsableSpace() > fileSize);
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+            channel.write(ByteBuffer.wrap(new byte[] { 0x5a }), fileSize - 1);
+            try (MCRFileChannelInputStream stream = new MCRFileChannelInputStream(channel)) {
+                assertEquals(fileSize, stream.length());
+                stream.seek(Integer.MAX_VALUE - 2L);
+                byte[] read = new byte[WINDOW_SIZE + 2];
+                stream.readFully(read);
+                byte[] expected = new byte[read.length];
+                expected[expected.length - 1] = 0x5a;
+                assertArrayEquals(expected, read);
+                assertEquals(-1, stream.read());
+            }
+        }
     }
 }
