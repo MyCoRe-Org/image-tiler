@@ -74,7 +74,7 @@ public class MCRTiledPictureProps {
 
     /**
      * gets properties of the given <code>.iview2</code> file.
-     * Use {@link MCRImage#getTiledFile(Path, String, String)} to get the {@link Path} instance of the <code>.iview2</code> file.
+     * Use {@link MCRImage#getTiledPath(Path, String, String)} to get the {@link Path} instance of the <code>.iview2</code> file.
      * @param iviewFile the IView2 file
      * @return instance of the class referring <code>iviewFile</code>
      * @throws IOException Exceptions occurs while accessing <code>iviewFile</code>.
@@ -87,7 +87,7 @@ public class MCRTiledPictureProps {
 
     /**
      * gets properties of the given <code>.iview2</code> file.
-     * Use {@link MCRImage#getTiledFile(Path, String, String)} to get the {@link Path} instance of the <code>.iview2</code> file.
+     * Use {@link MCRImage#getTiledPath(Path, String, String)} to get the {@link Path} instance of the <code>.iview2</code> file.
      * @param iviewFile the IView2 file
      * @return instance of the class referring <code>iviewFile</code>
      * @throws IOException Exceptions occurs while accessing <code>iviewFile</code>.
@@ -103,7 +103,7 @@ public class MCRTiledPictureProps {
 
     /**
      * gets properties of the given <code>.iview2</code> file.
-     * Use {@link MCRImage#getTiledFile(Path, String, String)} to get the {@link Path} instance of the <code>.iview2</code> file.
+     * Use {@link MCRImage#getTiledPath(Path, String, String)} to get the {@link Path} instance of the <code>.iview2</code> file.
      * @param iviewFileRoot the root of the iviewFile
      * @return instance of the class referring <code>iviewFile</code>
      * @throws IOException Exceptions occurs while accessing <code>iviewFile</code>.
