@@ -263,7 +263,7 @@ public class MCRImageTest {
         final Path file = testFilesDir.resolve("Gray Gamma 2.2.tif").toAbsolutePath();
         final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
         image.tile();
-        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("Gray Gamma 2.2.iview2"))) {
+        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("Gray Gamma 2.2.tif.iview2"))) {
             Path root = iviewFS.getRootDirectories().iterator().next();
             Path thumbnailPath = root.resolve("0/0/0.jpg");
             BufferedImage thumbnail = getBufferedImage(thumbnailPath, false);
@@ -286,7 +286,7 @@ public class MCRImageTest {
         final Path file = testFilesDir.resolve("50 Gray Gamma 2.2.tif").toAbsolutePath();
         final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
         image.tile();
-        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("50 Gray Gamma 2.2.iview2"))) {
+        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("50 Gray Gamma 2.2.tif.iview2"))) {
             Path root = iviewFS.getRootDirectories().iterator().next();
             Path thumbnailPath = root.resolve("0/0/0.jpg");
             BufferedImage thumbnail = getBufferedImage(thumbnailPath, false);
