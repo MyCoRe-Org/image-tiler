@@ -18,6 +18,7 @@
 package org.mycore.imagetiler;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.awt.Color;
@@ -165,7 +166,7 @@ public class MCRImageTest {
             assertTrue("preImageReaderCreated() was not called", events.get(0));
             assertTrue("postImageReaderCreated() was not called", events.get(1));
             assertTrue("Tile directory is not created.", Files.exists(tileDir));
-            final Path iviewFile = MCRImage.getTiledFile(tileDir, derivateID, imagePath);
+            final Path iviewFile = MCRImage.getTiledPath(tileDir, derivateID, imagePath);
             assertTrue("IView File is not created:" + iviewFile, Files.exists(iviewFile));
             final MCRTiledPictureProps props = MCRTiledPictureProps.getInstanceFromFile(iviewFile);
             final int tilesCount;
@@ -221,7 +222,7 @@ public class MCRImageTest {
         image.setTileDir(tileDir);
         image.tile();
         assertTrue("Tile directory is not created.", Files.exists(tileDir));
-        final Path iviewFile = MCRImage.getTiledFile(tileDir, derivateID, imagePath);
+        final Path iviewFile = MCRImage.getTiledPath(tileDir, derivateID, imagePath);
         try (final ZipFile iviewImage = new ZipFile(iviewFile.toFile())) {
             ZipEntry tileEntry = new ZipEntry("0/0/0.jpg");
             try (InputStream is = iviewImage.getInputStream(tileEntry)) {
@@ -262,7 +263,7 @@ public class MCRImageTest {
         final Path file = testFilesDir.resolve("Gray Gamma 2.2.tif").toAbsolutePath();
         final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
         image.tile();
-        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("Gray Gamma 2.2.iview2"))) {
+        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("Gray Gamma 2.2.tif.iview2"))) {
             Path root = iviewFS.getRootDirectories().iterator().next();
             Path thumbnailPath = root.resolve("0/0/0.jpg");
             BufferedImage thumbnail = getBufferedImage(thumbnailPath, false);
@@ -285,7 +286,7 @@ public class MCRImageTest {
         final Path file = testFilesDir.resolve("50 Gray Gamma 2.2.tif").toAbsolutePath();
         final MCRImage image = MCRImage.getInstance(testFilesDir, file, tileDir);
         image.tile();
-        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("50 Gray Gamma 2.2.iview2"))) {
+        try (FileSystem iviewFS = getFileSystem(tileDir.resolve("50 Gray Gamma 2.2.tif.iview2"))) {
             Path root = iviewFS.getRootDirectories().iterator().next();
             Path thumbnailPath = root.resolve("0/0/0.jpg");
             BufferedImage thumbnail = getBufferedImage(thumbnailPath, false);
@@ -412,13 +413,30 @@ public class MCRImageTest {
     }
 
     @Test
+    public void testGetTiledPath() {
+        String final1 = "00";
+        String final2 = "01";
+        String derivateID = "junit_derivate_0000" + final1 + final2;
+        Path derivateDir = tileDir.resolve("junit/derivate/" + final1 + "/" + final2 + '/' + derivateID);
+        assertEquals(derivateDir, MCRImage.getTiledPath(tileDir, derivateID, null));
+        assertEquals(derivateDir.resolve("foo/bar.tif.iview2"),
+            MCRImage.getTiledPath(tileDir, derivateID, "foo/bar.tif"));
+        assertEquals(derivateDir.resolve("foo/bar.tif.iview2"),
+            MCRImage.getTiledPath(tileDir, derivateID, "/foo/bar.tif"));
+        assertEquals(derivateDir.resolve("scan.v2/image.iview2"),
+            MCRImage.getTiledPath(tileDir, derivateID, "/scan.v2/image"));
+        assertNotEquals(MCRImage.getTiledPath(tileDir, derivateID, "/talk.jpg"),
+            MCRImage.getTiledPath(tileDir, derivateID, "/talk.pdf"));
+    }
+
+    @Test
     public void testGetTiledFileWithoutMCR() throws IOException {
         Path firstImage = pics.values().stream().findFirst().get().toAbsolutePath();
         Path baseDir = firstImage.getParent().getParent().toAbsolutePath();
         Path targetDir = Path.of("target");
         Path imageFile = baseDir.relativize(firstImage);
         MCRImage image = MCRImage.getInstance(baseDir, imageFile, targetDir);
-        Path tiledFile = MCRImage.getTiledFile(targetDir, null, imageFile.toString());
+        Path tiledFile = MCRImage.getTiledPath(targetDir, null, imageFile.toString());
         image.tile();
         assertTrue("Tiled file is not present " + tiledFile, Files.exists(tiledFile));
     }
