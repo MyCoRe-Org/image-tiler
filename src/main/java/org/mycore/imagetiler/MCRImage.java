@@ -163,6 +163,14 @@ public class MCRImage {
 
     private boolean converTilesToGray = false;
 
+    /**
+     * position the image input stream was at before any reader touched it, see {@link #reattachInput(ImageReader)}.
+     * Only {@link #tile(MCRTileEventHandler)} sets it, so a subclass that calls
+     * {@link #getTileOfFile(ImageReader, int, int, int, int)} outside of a running tile process works with the
+     * default 0.
+     */
+    private long inputStreamOrigin;
+
     static {
         imageWriteParam = new JPEGImageWriteParam(Locale.getDefault());
         try {
@@ -341,6 +349,7 @@ public class MCRImage {
      */
     protected BufferedImage getTileOfFile(final ImageReader reader, final int x, final int y, final int width,
         final int height) throws IOException {
+        reattachInput(reader);
         final ImageReadParam param = reader.getDefaultReadParam();
         final Rectangle srcRegion = new Rectangle(x, y, width, height);
         final Rectangle physicalRegion = MCROrientationUtils.toPhysical(imageWidth, imageHeight, srcRegion,
@@ -353,6 +362,31 @@ public class MCRImage {
             .map(trans -> new AffineTransformOp(trans, AffineTransformOp.TYPE_BILINEAR))
             .map(op -> op.filter(transformInput, getBufferedImage(transformInput, srcRegion)))
             .orElse(transformInput);
+    }
+
+    /**
+     * Re-attaches the input stream to the reader before every read.
+     * <p>
+     * The native JPEG decoder allocates a scanline buffer of <code>read width * components</code> bytes on every
+     * {@link ImageReader#read(int, ImageReadParam)} and keeps it alive behind a JNI global reference. Only
+     * {@link ImageReader#setInput(Object, boolean, boolean)} and {@link ImageReader#dispose()} release it, so a
+     * reader used for n mega tiles would leak n-1 of those buffers. Re-attaching costs nothing measurable, the
+     * readers seek back to the start of the image on every read anyway.
+     * <p>
+     * Skipped for readers that flushed the stream past its origin - PNG does that after reading the header - because
+     * those cannot be rewound. They are all pure Java readers and do not leak.
+     * <p>
+     * Note that <code>setInput</code> discards the complete reader state, not just that scanline buffer: after this
+     * call the reader is back in its initial state and no previously obtained reader state - image dimensions, image
+     * types, thumbnails - may be reused. Anything of that kind has to be read before the first re-attach and kept
+     * outside the reader.
+     */
+    private void reattachInput(final ImageReader reader) throws IOException {
+        if (reader.getInput() instanceof ImageInputStream imageInputStream
+            && imageInputStream.getFlushedPosition() <= inputStreamOrigin) {
+            imageInputStream.seek(inputStreamOrigin);
+            reader.setInput(imageInputStream, false, true);
+        }
     }
 
     private static BufferedImage getBufferedImage(BufferedImage transformInput, Rectangle srcRegion) {
@@ -560,6 +594,7 @@ public class MCRImage {
         try (ByteChannel bc = Files.newByteChannel(imageFile, StandardOpenOption.READ);
             ImageInputStream imageInputStream = ImageIO.createImageInputStream(bc)) {
 
+            inputStreamOrigin = imageInputStream.getStreamPosition();
             final ImageReader imageReader;
             try {
                 imageReader = MCRImage.createImageReader(imageInputStream);
