@@ -7,4 +7,12 @@
     <Match>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
     </Match>
+    <!-- MCRImage is used by one thread only, its AtomicInteger tile counter makes SpotBugs treat it as shared -->
+    <Match>
+        <Class name="org.mycore.imagetiler.MCRImage"/>
+        <Or>
+            <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+            <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+        </Or>
+    </Match>
 </FindBugsFilter>
