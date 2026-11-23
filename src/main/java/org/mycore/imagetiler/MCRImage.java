@@ -82,8 +82,8 @@ import jakarta.xml.bind.annotation.XmlRootElement;
  *  <dt>imagePath</dt>
  *  <dd>directory/image.tiff</dd>
  * </dl>
- * results in: <code>tileDir/mycore/derivate/45/67/mycore_derivate_01234567/directory/image.iview2</code><br>
- * You can use {@link #getTiledFile(Path, String, String)} to get access to the IView2 file.
+ * results in: <code>tileDir/mycore/derivate/45/67/mycore_derivate_01234567/directory/image.tiff.iview2</code><br>
+ * You can use {@link #getTiledPath(Path, String, String)} to get access to the IView2 file.
  *
  * @author Thomas Scheffler (yagee)
  */
@@ -262,12 +262,39 @@ public class MCRImage {
 
     /**
      * returns a {@link Path} object of the .iview2 file or the derivate folder.
+     * <p>
+     * The tile file name is the full file name of the image with <code>.iview2</code> appended,
+     * e.g. <code>directory/image.tiff</code> results in <code>directory/image.tiff.iview2</code>.
      *
      * @param tileDir    the base directory of all image tiles
      * @param derivateID the derivate ID the image belongs to
      * @param imagePath  the relative path from the derivate root to the image
      * @return tile directory of derivate if <code>imagePath</code> is null or the tile file (.iview2)
      */
+    public static Path getTiledPath(final Path tileDir, final String derivateID, final String imagePath) {
+        LOGGER.debug("tileDir: {}, derivate: {}, imagePath: {}", tileDir, derivateID, imagePath);
+        Path tileFile = getTiledFileBaseDir(tileDir, derivateID);
+        if (imagePath == null) {
+            return tileFile;
+        }
+        final String relPath = imagePath.substring(imagePath.charAt(0) == '/' ? 1 : 0) + ".iview2";
+        return tileFile.resolve(relPath);
+    }
+
+    /**
+     * returns a {@link Path} object of the .iview2 file or the derivate folder.
+     * <p>
+     * The tile file name is the image path without its file extension and with <code>.iview2</code> appended.
+     * Files sharing the same base name therefore map to the same tile file.
+     *
+     * @param tileDir    the base directory of all image tiles
+     * @param derivateID the derivate ID the image belongs to
+     * @param imagePath  the relative path from the derivate root to the image
+     * @return tile directory of derivate if <code>imagePath</code> is null or the tile file (.iview2)
+     * @deprecated use {@link #getTiledPath(Path, String, String)}, this method is only kept to locate tile files
+     * created by previous versions
+     */
+    @Deprecated
     public static Path getTiledFile(final Path tileDir, final String derivateID, final String imagePath) {
         LOGGER.debug("tileDir: {}, derivate: {}, imagePath: {}", tileDir, derivateID, imagePath);
         Path tileFile = getTiledFileBaseDir(tileDir, derivateID);
@@ -782,7 +809,7 @@ public class MCRImage {
      * @throws FileNotFoundException if tile directory or image file does not exist and cannot be created
      */
     private ZipOutputStream getZipOutputStream() throws IOException {
-        final Path iviewFile = getTiledFile(tileBaseDir, derivate, imagePath);
+        final Path iviewFile = getTiledPath(tileBaseDir, derivate, imagePath);
         LOGGER.info("Saving tiles in {}", iviewFile);
         Path parentDir = iviewFile.getParent();
         assert parentDir != null;
