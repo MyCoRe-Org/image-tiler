@@ -14,7 +14,7 @@
   <scm>
     <connection>scm:git:https://github.com/MyCoRe-Org/image-tiler.git</connection>
     <developerConnection>scm:git:https://github.com/MyCoRe-Org/image-tiler.git</developerConnection>
-    <url>https://github.com/MyCoRe-Org/image-tiler/tree/main</url>
+    <url>https://github.com/MyCoRe-Org/image-tiler/tree/v4.2</url>
     <tag>HEAD</tag>
   </scm>
   <properties>
