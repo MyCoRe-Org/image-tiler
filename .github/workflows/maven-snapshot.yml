@@ -18,7 +18,7 @@ jobs:
       cancel-in-progress: true
     uses: MyCoRe-Org/github-workflows/.github/workflows/maven-deploy.yml@v1
     with:
-      java-version: '25'
+      java-version: '17'
     secrets:
       MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
       MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
